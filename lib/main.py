@@ -8,7 +8,7 @@ from lib.modules.neovim import Neovim
 from lib.modules.terminal import Terminal
 from lib.modules.build_tools import BuildTools
 from lib.modules.utils import Utils
-from lib.utils.logger import print_err
+from lib.utils.logger import Logger
 
 def get_platform():
     if sys.platform == "win32":
@@ -39,7 +39,7 @@ Use command line arguments to specify additional installations (use --help for h
     try:
         platform = get_platform()
     except NotImplementedError as e:
-        print_err(str(e))
+        Logger.err(str(e))
         sys.exit(1)
 
     # Always install default components (Git, VS Code config)

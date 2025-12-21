@@ -1,16 +1,21 @@
 from rich.console import Console
 
-stdout = Console(stderr=False)
-stderr = Console(stderr=True)
+class Logger:
+    _stdout = Console(stderr=False)
+    _stderr = Console(stderr=True)
 
-def print_info(msg):
-    stdout.print(f"[INFO] {msg}", style="default")
+    @staticmethod
+    def info(msg: str):
+        Logger._stdout.print(f"[INFO] {msg}", style="default")
 
-def print_ok(msg):
-    stdout.print(f"[OK] {msg}", style="green")
+    @staticmethod
+    def ok(msg: str):
+        Logger._stdout.print(f"[OK] {msg}", style="green")
 
-def print_warn(msg):
-    stdout.print(f"[WARNING] {msg}", style="yellow")
+    @staticmethod
+    def warn(msg: str):
+        Logger._stdout.print(f"[WARNING] {msg}", style="yellow")
 
-def print_err(msg):
-    stderr.print(f"[ERROR] {msg}", style="red")
+    @staticmethod
+    def err(msg: str):
+        Logger._stderr.print(f"[ERROR] {msg}", style="red")

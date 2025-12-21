@@ -30,6 +30,11 @@ class Platform(ABC):
         """Returns the path to VS Code settings.json."""
         pass
 
+    @abstractmethod
+    def get_vscode_keybindings_path(self) -> str:
+        """Returns the path to VS Code keybindings.json."""
+        pass
+
     def _load_vscode_settings(self) -> Dict[str, Any]:
         path = self.get_vscode_settings_path()
         if not os.path.exists(path):
@@ -48,6 +53,25 @@ class Platform(ABC):
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(settings, f, indent=4)
 
+    def _load_vscode_keybindings(self) -> list:
+        path = self.get_vscode_keybindings_path()
+        if not os.path.exists(path):
+            return []
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = json.load(f)
+                if isinstance(content, list):
+                    return content
+                return []
+        except json.JSONDecodeError as e:
+            raise Exception(f"Failed to parse {path}: {e}")
+
+    def _save_vscode_keybindings(self, keybindings: list) -> None:
+        path = self.get_vscode_keybindings_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(keybindings, f, indent=4)
+
     def check_vscode_setting_exists(self, key: str) -> bool:
         settings = self._load_vscode_settings()
         return key in settings
@@ -57,5 +81,18 @@ class Platform(ABC):
         settings = self._load_vscode_settings()
         settings[key] = value
         self._save_vscode_settings(settings)
+
+    def add_vscode_keybinding(self, keybinding: Dict[str, Any]) -> None:
+        """Adds a VS Code keybinding if it doesn't already exist."""
+        bindings = self._load_vscode_keybindings()
+        
+        # Check for duplicates based on 'key' and 'command'
+        for b in bindings:
+            if b.get("key") == keybinding.get("key") and b.get("command") == keybinding.get("command"):
+                # Already exists
+                return
+
+        bindings.append(keybinding)
+        self._save_vscode_keybindings(bindings)
         """Returns the user's home directory."""
         pass

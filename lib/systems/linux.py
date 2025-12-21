@@ -3,7 +3,7 @@ import shutil
 import subprocess
 from typing import Union
 from lib.systems.platform import Platform
-from lib.utils.logger import print_ok, print_warn, print_err, print_info
+from lib.utils.logger import Logger
 from lib.core.packages import KnownPackage
 
 class LinuxPlatform(Platform):
@@ -20,15 +20,15 @@ class LinuxPlatform(Platform):
             manager = "pacman"
             cmd = ["sudo", "pacman", "-S", "--noconfirm", package_name]
         else:
-            print_err("No supported package manager found (apt, pacman).")
+            Logger.err("No supported package manager found (apt, pacman).")
             raise NotImplementedError("Package manager not supported.")
 
-        print_info(f"Installing {package_name} via {manager}...")
+        Logger.info(f"Installing {package_name} via {manager}...")
         try:
             subprocess.run(cmd, check=True)
-            print_ok(f"Successfully installed {package_name}")
+            Logger.ok(f"Successfully installed {package_name}")
         except subprocess.CalledProcessError as e:
-            print_err(f"Failed to install {package_name}: {e}")
+            Logger.err(f"Failed to install {package_name}: {e}")
             raise
 
     def add_to_path(self, folder_path: str) -> None:
@@ -45,7 +45,7 @@ class LinuxPlatform(Platform):
                     with open(config_path, "r") as f:
                         content = f.read()
                         if f"export PATH=\"$PATH:{folder_path}\"" in content:
-                            print_warn(f"'{folder_path}' is already in {rc_file}.")
+                            Logger.warn(f"'{folder_path}' is already in {rc_file}.")
                             continue
                     
                     with open(config_path, "a") as f:
@@ -53,14 +53,14 @@ class LinuxPlatform(Platform):
                     updated.append(rc_file)
 
             if updated:
-                print_ok(f"Added path to {', '.join(updated)}. Restart terminal to apply.")
+                Logger.ok(f"Added path to {', '.join(updated)}. Restart terminal to apply.")
             elif not updated:
                 # If no rc files found or all already have it, maybe warn if none found?
                 # But .bashrc almost always exists.
                 pass
             
         except Exception as e:
-            print_err(f"Failed to add path variable: {e}")
+            Logger.err(f"Failed to add path variable: {e}")
             raise
 
     def install_vscode_extension(self, extension_id: str) -> None:
@@ -71,3 +71,6 @@ class LinuxPlatform(Platform):
 
     def get_vscode_settings_path(self) -> str:
         return os.path.join(self.get_home_dir(), ".config", "Code", "User", "settings.json")
+
+    def get_vscode_keybindings_path(self) -> str:
+        return os.path.join(self.get_home_dir(), ".config", "Code", "User", "keybindings.json")

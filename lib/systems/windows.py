@@ -6,7 +6,7 @@ except ImportError:
 import subprocess
 from typing import Union
 from lib.systems.platform import Platform
-from lib.utils.logger import print_ok, print_warn, print_err, print_info
+from lib.utils.logger import Logger
 from lib.core.packages import KnownPackage
 
 class WindowsPlatform(Platform):
@@ -16,7 +16,7 @@ class WindowsPlatform(Platform):
         else:
             package_name = package
 
-        print_info(f"Installing {package_name} via Winget...")
+        Logger.info(f"Installing {package_name} via Winget...")
         cmd = [
             "winget", "install", "-e", 
             "--id", package_name, 
@@ -33,9 +33,9 @@ class WindowsPlatform(Platform):
             # I'll try without shell=True first as it's safer, but if it fails I might need it.
             # The bat file uses it directly.
             subprocess.run(cmd, check=True, shell=True) 
-            print_ok(f"Successfully installed {package_name}")
+            Logger.ok(f"Successfully installed {package_name}")
         except subprocess.CalledProcessError as e:
-            print_err(f"Failed to install {package_name}: {e}")
+            Logger.err(f"Failed to install {package_name}: {e}")
             raise
 
     def add_to_path(self, folder_path: str) -> None:
@@ -53,7 +53,7 @@ class WindowsPlatform(Platform):
                 current_path_value = ""
 
             if folder_path in current_path_value:
-                print_warn(f"'{folder_path}' is already in the PATH.")
+                Logger.warn(f"'{folder_path}' is already in the PATH.")
                 return
 
             new_path_value = current_path_value + (";" if current_path_value else "") + folder_path
@@ -63,10 +63,10 @@ class WindowsPlatform(Platform):
             # Update current process environment so subsequent commands work immediately
             os.environ["PATH"] = new_path_value
             
-            print_ok(f"Successfully added '{folder_path}' to User PATH.")
+            Logger.ok(f"Successfully added '{folder_path}' to User PATH.")
             
         except Exception as e:
-            print_err(f"Failed to add path variable: {e}")
+            Logger.err(f"Failed to add path variable: {e}")
             raise
         
         finally:
@@ -82,3 +82,6 @@ class WindowsPlatform(Platform):
 
     def get_vscode_settings_path(self) -> str:
         return os.path.join(os.environ["APPDATA"], "Code", "User", "settings.json")
+
+    def get_vscode_keybindings_path(self) -> str:
+        return os.path.join(os.environ["APPDATA"], "Code", "User", "keybindings.json")
