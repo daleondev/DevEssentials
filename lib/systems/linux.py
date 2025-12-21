@@ -33,22 +33,31 @@ class LinuxPlatform(Platform):
 
     def add_to_path(self, folder_path: str) -> None:
         home = self.get_home_dir()
-        shell_config = os.path.join(home, ".bashrc") 
-        # Note: This simple check might fail for zsh or other shells, keeping it simple as per original script for now.
         line_to_add = f'\nexport PATH="$PATH:{folder_path}"\n'
+        
+        targets = [".bashrc", ".zshrc"]
+        updated = []
 
         try:
-            if os.path.exists(shell_config):
-                with open(shell_config, "r") as f:
-                    content = f.read()
-                    if f"export PATH=\"$PATH:{folder_path}\"" in content:
-                        print_warn(f"'{folder_path}' is already in the PATH.")
-                        return
-            
-            with open(shell_config, "a") as f:
-                f.write(line_to_add)
-            
-            print_ok(f"Added to {shell_config}. Run 'source {shell_config}' or restart terminal.")
+            for rc_file in targets:
+                config_path = os.path.join(home, rc_file)
+                if os.path.exists(config_path):
+                    with open(config_path, "r") as f:
+                        content = f.read()
+                        if f"export PATH=\"$PATH:{folder_path}\"" in content:
+                            print_warn(f"'{folder_path}' is already in {rc_file}.")
+                            continue
+                    
+                    with open(config_path, "a") as f:
+                        f.write(line_to_add)
+                    updated.append(rc_file)
+
+            if updated:
+                print_ok(f"Added path to {', '.join(updated)}. Restart terminal to apply.")
+            elif not updated:
+                # If no rc files found or all already have it, maybe warn if none found?
+                # But .bashrc almost always exists.
+                pass
             
         except Exception as e:
             print_err(f"Failed to add path variable: {e}")

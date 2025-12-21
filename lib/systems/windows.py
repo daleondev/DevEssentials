@@ -59,6 +59,10 @@ class WindowsPlatform(Platform):
             new_path_value = current_path_value + (";" if current_path_value else "") + folder_path
 
             winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, new_path_value)
+            
+            # Update current process environment so subsequent commands work immediately
+            os.environ["PATH"] = new_path_value
+            
             print_ok(f"Successfully added '{folder_path}' to User PATH.")
             
         except Exception as e:

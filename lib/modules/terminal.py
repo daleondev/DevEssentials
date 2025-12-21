@@ -1,6 +1,9 @@
 import os
 import sys
+import shutil
 import subprocess
+import urllib.request
+import zipfile
 from lib.modules.base import Component
 from lib.core.packages import KnownPackage
 from lib.utils.logger import print_info, print_ok, print_err
@@ -58,14 +61,30 @@ class Terminal(Component):
         if sys.platform == "win32":
             self.platform.install_package(KnownPackage.CASCADIA_CODE_NF)
         else:
-            print_info("Manual font installation on Linux is complex. Installing via oh-my-posh if possible or skipping.")
-            # We can try using oh-my-posh CLI if installed
             try:
-                 # oh-my-posh font install CaskaydiaCove
-                 # Note: This is interactive. 
-                 print_info("Skipping automatic font installation on Linux. Please run: oh-my-posh font install CaskaydiaCove")
-            except Exception:
-                pass
+                print_info("Downloading Caskaydia Cove NF...")
+                url = "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/CascadiaCode.zip"
+                download_path = "tmp"
+                download_file = os.path.join(download_path, "CascadiaCode.zip")
+                os.makedirs(download_path, exist_ok=True)
+                
+                urllib.request.urlretrieve(url, download_file)
+                
+                font_dir = os.path.expanduser("~/.local/share/fonts")
+                os.makedirs(font_dir, exist_ok=True)
+                
+                print_info(f"Extracting to {font_dir}...")
+                with zipfile.ZipFile(download_file, 'r') as zip_ref:
+                    # Filter only ttf/otf files or just extract all. Extracting all is easier.
+                    zip_ref.extractall(font_dir)
+                    
+                print_info("Updating font cache...")
+                subprocess.run(["fc-cache", "-fv"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                print_ok("Successfully installed Nerd Font on Linux.")
+                
+            except Exception as e:
+                print_err(f"Failed to install font manually: {e}")
+                print_info("Skipping automatic font installation. Please install 'CaskaydiaCove Nerd Font' manually.")
 
     def _configure_shell(self):
         print_info("Configuring Shell...")
@@ -89,6 +108,10 @@ class Terminal(Component):
              # For pwsh, it's usually in Documents\PowerShell\Microsoft.PowerShell_profile.ps1
              # We can ask PowerShell for the path.
              try:
+                 if not shutil.which("pwsh"):
+                     print_warn("pwsh not found in PATH. Skipping profile configuration. Please restart terminal and run again.")
+                     return
+
                  result = subprocess.check_output(["pwsh", "-NoProfile", "-Command", "echo $PROFILE"], shell=True)
                  profile_path = result.decode().strip()
                  

@@ -14,7 +14,7 @@ class KnownPackage(Enum):
     ZSH = PackageId(win="None", linux="zsh")
     OHMYPOSH = PackageId(win="JanDeDobbeleer.OhMyPosh", linux="oh-my-posh")
     CASCADIA_CODE_NF = PackageId(win="Nerdfonts.CaskaydiaCove", linux="fonts-cascadia-code")
-    GCC_TOOLCHAIN = PackageId(win="BrechtSanders.WinLibs.POSIX.UCRT", linux="build-essential")
+    GCC_TOOLCHAIN = PackageId(win="BrechtSanders.WinLibs", linux="build-essential")
     CMAKE = PackageId(win="Kitware.CMake", linux="cmake")
     NINJA = PackageId(win="Ninja-build.Ninja", linux="ninja-build")
     WGET = PackageId(win="JernejSimoncic.Wget", linux="wget")

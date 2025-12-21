@@ -3,7 +3,7 @@ import sys
 import os
 from lib.systems.windows import WindowsPlatform
 from lib.systems.linux import LinuxPlatform
-from lib.modules.vscode import VSCode
+from lib.modules.default import Default
 from lib.modules.neovim import Neovim
 from lib.modules.terminal import Terminal
 from lib.modules.build_tools import BuildTools
@@ -22,7 +22,11 @@ def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="""
-This script installs essential programs for the current user.
+This script installs essential programs for the current user
+Installs the following by default:
+    - vscode (with initial configuration)
+    - git
+Use command line arguments to specify additional installations (use --help for help)
 """
     )
     parser.add_argument("--with-terminal", action="store_true", help="Install pretty terminal (shell, shell-scheme, oh-my-posh, vscode-integration)")
@@ -37,6 +41,9 @@ This script installs essential programs for the current user.
     except NotImplementedError as e:
         print_err(str(e))
         sys.exit(1)
+
+    # Always install default components (Git, VS Code config)
+    Default(platform).install()
 
     if args.with_terminal:
         terminal_component = Terminal(platform)
