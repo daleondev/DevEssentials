@@ -75,3 +75,6 @@ class WindowsPlatform(Platform):
 
     def get_home_dir(self) -> str:
         return os.path.expanduser("~")
+
+    def get_vscode_settings_path(self) -> str:
+        return os.path.join(os.environ["APPDATA"], "Code", "User", "settings.json")

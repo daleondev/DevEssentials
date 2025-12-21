@@ -5,6 +5,9 @@ from lib.systems.windows import WindowsPlatform
 from lib.systems.linux import LinuxPlatform
 from lib.modules.vscode import VSCode
 from lib.modules.neovim import Neovim
+from lib.modules.terminal import Terminal
+from lib.modules.build_tools import BuildTools
+from lib.modules.utils import Utils
 from lib.utils.logger import print_err
 
 def get_platform():
@@ -35,29 +38,22 @@ This script installs essential programs for the current user.
         print_err(str(e))
         sys.exit(1)
 
-    # Always run VSCode setup? Original script had it commented out but docs said default.
-    # The original script had:
-    # # vscode() 
-    # if args.with_neovim: ...
-    
-    # I will enable it if requested or maybe just leave it as is.
-    # The user instruction says "The bat script will install python and then call the python script...". 
-    # Original script description: "Installs the following by default: - vscode (with initial configuration)"
-    # But the call `vscode()` was commented out in `main()`.
-    # I will follow the explicit flags for now. If user wants vscode, I should probably add a flag or uncomment it.
-    # I'll add a check: if no args provided, maybe do default?
-    # For now, I will strictly follow the flags to match the exact behavior of the provided script,
-    # where `vscode()` was commented out. So I won't call it unless I add a flag or user asks.
-    # Wait, the user said "Installs the following by default: - vscode", but code was commented out.
-    # I will leave it out for now to be safe, but allow `Neovim` via flag.
-    
+    if args.with_terminal:
+        terminal_component = Terminal(platform)
+        terminal_component.install()
+
+    if args.with_build_tools:
+        build_tools_component = BuildTools(platform)
+        build_tools_component.install()
+
+    if args.with_utils:
+        utils_component = Utils(platform)
+        utils_component.install()
+
     if args.with_neovim:
         neovim_component = Neovim(platform)
         neovim_component.install()
 
-    if args.with_terminal:
-        # Placeholder for future
-        pass
 
 if __name__ == "__main__":
     main()
