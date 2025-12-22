@@ -25,12 +25,13 @@ class Terminal(Component):
         
         if sys.platform == "win32":
             Logger.info("Installing Pwsh...")
-            # self.platform.install_package(KnownPackage.POWERSHELL)
+            self.platform.install_package(KnownPackage.POWERSHELL)
             
             # TODO: 
-            #   find installation path (e.g. C:\Users\User\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe)
-            #   edit settings (e.g. C:\Users\User\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json) 
+            #   find installation path of windows terminal (e.g. C:\Users\User\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe)
+            #   edit windows terminal settings (e.g. C:\Users\User\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json) 
             #   create a function for editing the settings.json in platform -> windows
+            #   make pwsh the default terminal
             Logger.ok(f"Pwsh installed as default terminal")
             
             Logger.info("Creating Pwsh shortcut...")
@@ -83,16 +84,16 @@ class Terminal(Component):
             subprocess.run(cmd, shell=True, check=True)
 
     def _install_font(self):
-        Logger.info("Installing Font (Caskaydia Cove NF)...")
+        Logger.info("Installing Font (Cascadia Mono NF)...")
         if sys.platform == "win32":
-            self.platform.install_package(KnownPackage.CASCADIA_CODE_NF)
+            # TODO: 
+            #   manually download cascadia code from github (e.g. https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip)
+            #   unzip to tmp folder and install cascadia mono nf
         else:
             try:
-                Logger.info("Downloading Caskaydia Cove NF...")
-                url = "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/CascadiaCode.zip"
-                download_path = "tmp"
-                download_file = os.path.join(download_path, "CascadiaCode.zip")
-                os.makedirs(download_path, exist_ok=True)
+                # TODO: 
+                #   manually download cascadia code from github (e.g. https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip)
+                #   unzip to tmp folder and install cascadia mono nf
                 
                 urllib.request.urlretrieve(url, download_file)
                 
@@ -119,11 +120,11 @@ class Terminal(Component):
         try:
             Logger.info("Updating VS Code terminal settings...")
             if sys.platform == "win32":
-                self.platform.update_vscode_setting("terminal.integrated.defaultProfile.windows", "PowerShell")
+                self.platform.add_vscode_setting("terminal.integrated.defaultProfile.windows", "PowerShell")
             else:
-                self.platform.update_vscode_setting("terminal.integrated.defaultProfile.linux", "zsh")
+                self.platform.add_vscode_setting("terminal.integrated.defaultProfile.linux", "zsh")
             
-            self.platform.update_vscode_setting("terminal.integrated.fontFamily", "CaskaydiaCove NF")
+            self.platform.add_vscode_setting("terminal.integrated.fontFamily", "Cascadia Mono NF")          
             Logger.ok("VS Code terminal settings updated.")
         except Exception as e:
             Logger.err(f"Failed to update VS Code settings: {e}")
@@ -144,7 +145,7 @@ class Terminal(Component):
                  # Ensure directory exists
                  os.makedirs(os.path.dirname(profile_path), exist_ok=True)
                  
-                 init_line = 'oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH/gruvbox.omp.json" | Invoke-Expression'
+                 init_line = 'oh-my-posh init pwsh --config "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/gruvbox.omp.json" | Invoke-Expression'
                  
                  # Read existing
                  content = ""
@@ -158,6 +159,9 @@ class Terminal(Component):
                      Logger.ok(f"Added Oh-My-Posh init to {profile_path}")
                  else:
                      Logger.info("Oh-My-Posh already configured in profile.")
+                     
+                # TODO: 
+                #   set cascadia mono nf as pwsh font
                      
              except Exception as e:
                  Logger.err(f"Failed to configure PowerShell profile: {e}")
@@ -179,5 +183,8 @@ class Terminal(Component):
                     Logger.ok(f"Added Oh-My-Posh init to {zshrc}")
                 else:
                     Logger.info("Oh-My-Posh already configured in .zshrc")
+                    
+                # TODO: 
+                #   set cascadia mono nf as zsh font
             except Exception as e:
                 Logger.err(f"Failed to configure .zshrc: {e}")

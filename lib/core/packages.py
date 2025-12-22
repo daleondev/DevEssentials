@@ -13,7 +13,6 @@ class KnownPackage(Enum):
     POWERSHELL = PackageId(win="Microsoft.PowerShell", linux="powershell")
     ZSH = PackageId(win="None", linux="zsh")
     OHMYPOSH = PackageId(win="JanDeDobbeleer.OhMyPosh", linux="oh-my-posh")
-    CASCADIA_CODE_NF = PackageId(win="Nerdfonts.CaskaydiaCove", linux="fonts-cascadia-code")
     GCC_TOOLCHAIN = PackageId(win="BrechtSanders.WinLibs.POSIX.UCRT", linux="build-essential")
     CMAKE = PackageId(win="None", linux="cmake")
     NINJA = PackageId(win="None", linux="ninja-build")

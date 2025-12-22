@@ -17,6 +17,7 @@ class Default(Component):
 
             # 3. Configure VS Code
             Logger.info("Configuring VS-Code...")
+            self.platform.add_vscode_setting("editor.fontFamily", "Cascadia Code")
             self.platform.add_vscode_setting("terminal.integrated.stickyScroll.enabled", False)
             self.platform.add_vscode_setting("editor.minimap.enabled", False)
             self.platform.add_vscode_setting("window.zoomLevel", 0.5)
