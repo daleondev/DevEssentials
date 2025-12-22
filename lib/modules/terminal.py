@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import urllib.request
 import zipfile
+from win32com.client import Dispatch
 from lib.modules.base import Component
 from lib.core.packages import KnownPackage
 from lib.utils.logger import Logger
@@ -21,12 +22,35 @@ class Terminal(Component):
             raise
 
     def _install_shell(self):
-        Logger.info("Installing Shell...")
+        
         if sys.platform == "win32":
-            # Install PowerShell Core
-            self.platform.install_package(KnownPackage.POWERSHELL)
+            Logger.info("Installing Pwsh...")
+            # self.platform.install_package(KnownPackage.POWERSHELL)
+            
+            # TODO: 
+            #   find installation path (e.g. C:\Users\User\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe)
+            #   edit settings (e.g. C:\Users\User\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json) 
+            #   create a function for editing the settings.json in platform -> windows
+            Logger.ok(f"Pwsh installed as default terminal")
+            
+            Logger.info("Creating Pwsh shortcut...")
+            link_directory = os.path.join(self.platform.get_home_dir(), "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs")
+            link_filepath = os.path.join(link_directory, "Windows Terminal.lnk")
+            
+            # TODO: 
+            #   create a function for creating shortcuts in platform
+            #   use installation path found previously instead of hardcoded
+            shell = Dispatch('WScript.Shell')
+            shortcut = shell.CreateShortCut(link_filepath)    
+            shortcut.Targetpath = os.path.join("C:\\", "Program Files", "WindowsApps", "Microsoft.WindowsTerminal_1.23.13503.0_x64__8wekyb3d8bbwe", "WindowsTerminal.exe")
+            shortcut.WorkingDirectory = link_directory
+            shortcut.Description = "Windows Terminal"
+            shortcut.Hotkey = "CTRL+ALT+T"
+            shortcut.save()
+            Logger.ok(f"Pwsh shortcut created at '{link_filepath}' with hotkey CTRL+ALT+T")
+            
         else:
-            # Install Zsh
+            Logger.info("Installing Zsh...")
             self.platform.install_package(KnownPackage.ZSH)
             # Try to set as default shell
             try:
@@ -38,6 +62,8 @@ class Terminal(Component):
                     # We can try, or just warn user.
                     # subprocess.run(["chsh", "-s", zsh_path], check=False) 
                     Logger.info(f"Please run 'chsh -s {zsh_path}' manually if it's not default.")
+                else:
+                    Logger.ok(f"Zsh installed as default terminal")
             except Exception as e:
                 Logger.err(f"Could not check/set default shell: {e}")
 

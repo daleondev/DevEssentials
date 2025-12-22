@@ -43,7 +43,6 @@ Use command line arguments to specify additional installations (use --help for h
         Logger.err(str(e))
         sys.exit(1)
 
-    # Always install default components (Git, VS Code config)
     Default(platform).install()
 
     if args.with_terminal or args.full:
