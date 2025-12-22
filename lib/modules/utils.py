@@ -5,15 +5,12 @@ from lib.utils.logger import Logger
 class Utils(Component):
     def install(self) -> None:
         try:
-            Logger.info("Installing Utilities (7zip, Wget, KeePass)...")
+            Logger.info("Installing Utilities (Wget, KeePass)...")
             
-            # 1. 7zip
-            self.platform.install_package(KnownPackage.ZIP7)
-            
-            # 2. Wget
+            # 1. Wget
             self.platform.install_package(KnownPackage.WGET)
             
-            # 3. KeePass
+            # 2. KeePass
             self.platform.install_package(KnownPackage.KEEPASS)
             
             Logger.ok("Successfully installed utilities.")

@@ -29,10 +29,11 @@ Installs the following by default:
 Use command line arguments to specify additional installations (use --help for help)
 """
     )
+    parser.add_argument("--full", action="store_true", help="Install everything (terminal, neovim, build-tools, utils)")
     parser.add_argument("--with-terminal", action="store_true", help="Install pretty terminal (shell, shell-scheme, oh-my-posh, vscode-integration)")
     parser.add_argument("--with-neovim", action="store_true", help="Install Neovim (neovim, vscode-integration)")
     parser.add_argument("--with-build-tools", action="store_true", help="Install posix build tools (gcc, gdb, make, cmake, ...)")
-    parser.add_argument("--with-utils", action="store_true", help="Install utilities (7zip, winget, ...)")
+    parser.add_argument("--with-utils", action="store_true", help="Install utilities (wget, keepass, ...)")
     
     args = parser.parse_args()
 
@@ -45,22 +46,21 @@ Use command line arguments to specify additional installations (use --help for h
     # Always install default components (Git, VS Code config)
     Default(platform).install()
 
-    if args.with_terminal:
+    if args.with_terminal or args.full:
         terminal_component = Terminal(platform)
         terminal_component.install()
-
-    if args.with_build_tools:
-        build_tools_component = BuildTools(platform)
-        build_tools_component.install()
-
-    if args.with_utils:
-        utils_component = Utils(platform)
-        utils_component.install()
-
-    if args.with_neovim:
+        
+    if args.with_neovim or args.full:
         neovim_component = Neovim(platform)
         neovim_component.install()
 
+    if args.with_build_tools or args.full:
+        build_tools_component = BuildTools(platform)
+        build_tools_component.install()
+
+    if args.with_utils or args.full:
+        utils_component = Utils(platform)
+        utils_component.install()
 
 if __name__ == "__main__":
     main()

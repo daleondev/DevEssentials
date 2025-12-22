@@ -1,3 +1,4 @@
+import sys
 from lib.modules.base import Component
 from lib.core.packages import KnownPackage
 from lib.utils.logger import Logger
@@ -12,11 +13,12 @@ class BuildTools(Component):
             # Linux: build-essential (GCC + Make)
             self.platform.install_package(KnownPackage.GCC_TOOLCHAIN)
             
-            # 2. CMake
-            self.platform.install_package(KnownPackage.CMAKE)
-            
-            # 3. Ninja
-            self.platform.install_package(KnownPackage.NINJA)
+            if sys.platform != "win32":
+                # 2. CMake
+                self.platform.install_package(KnownPackage.CMAKE)
+                
+                # 3. Ninja
+                self.platform.install_package(KnownPackage.NINJA)
             
             Logger.ok("Successfully installed build tools.")
             

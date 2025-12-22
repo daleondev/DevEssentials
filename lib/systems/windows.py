@@ -35,8 +35,9 @@ class WindowsPlatform(Platform):
             subprocess.run(cmd, check=True, shell=True) 
             Logger.ok(f"Successfully installed {package_name}")
         except subprocess.CalledProcessError as e:
-            Logger.err(f"Failed to install {package_name}: {e}")
-            raise
+            if e.returncode != 0x8A15002B:
+                Logger.err(f"Failed to install {package_name}: {e}")
+                raise
 
     def add_to_path(self, folder_path: str) -> None:
         key_path = r"Environment"

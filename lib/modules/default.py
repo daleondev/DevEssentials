@@ -19,6 +19,8 @@ class Default(Component):
             for ext in extensions:
                 self.platform.install_vscode_extension(ext)
             Logger.ok("Successfully installed VS-Code extensions")
+
+            Logger.ok("Successfully installed default applications")
             
         except Exception as e:
             Logger.err(f"Default installation failed: {e}")
