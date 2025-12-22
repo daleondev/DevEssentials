@@ -74,3 +74,33 @@ class LinuxPlatform(Platform):
 
     def get_vscode_keybindings_path(self) -> str:
         return os.path.join(self.get_home_dir(), ".config", "Code", "User", "keybindings.json")
+
+    def create_shortcut(self, target_path: str, shortcut_path: str, description: str = "", icon_path: str = "", working_dir: str = "", hotkey: str = "") -> None:
+        """Creates a .desktop file if shortcut_path ends with .desktop, otherwise does nothing."""
+        if not shortcut_path.endswith(".desktop"):
+            Logger.warn("Linux shortcut creation only supports .desktop files.")
+            return
+
+        if hotkey:
+            Logger.warn("Hotkeys are not standard in .desktop files and might not work implicitly.")
+
+        try:
+            content = f"""[Desktop Entry]
+Type=Application
+Name={os.path.splitext(os.path.basename(shortcut_path))[0]}
+Comment={description}
+Exec={target_path}
+Icon={icon_path}
+Terminal=false
+"""
+            if working_dir:
+                content += f"Path={working_dir}\n"
+            
+            with open(shortcut_path, "w") as f:
+                f.write(content)
+            
+            # Make it executable
+            os.chmod(shortcut_path, 0o755)
+            Logger.ok(f"Created desktop entry at {shortcut_path}")
+        except Exception as e:
+            Logger.err(f"Failed to create desktop entry: {e}")

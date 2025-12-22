@@ -16,7 +16,7 @@ class Neovim(Component):
                 url = "https://github.com/neovim/neovim/releases/download/v0.11.5/nvim-win64.zip"
                 archive_name = "nvim.zip"
                 
-                download_path = "tmp"
+                download_path = os.path.join(os.getcwd(), "tmp")
                 download_file = os.path.join(download_path, archive_name)
                 os.makedirs(download_path, exist_ok=True)
                 

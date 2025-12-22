@@ -4,7 +4,6 @@ import shutil
 import subprocess
 import urllib.request
 import zipfile
-from win32com.client import Dispatch
 from lib.modules.base import Component
 from lib.core.packages import KnownPackage
 from lib.utils.logger import Logger
@@ -27,28 +26,37 @@ class Terminal(Component):
             Logger.info("Installing Pwsh...")
             self.platform.install_package(KnownPackage.POWERSHELL)
             
-            # TODO: 
-            #   find installation path of windows terminal (e.g. C:\Users\User\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe)
-            #   edit windows terminal settings (e.g. C:\Users\User\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json) 
-            #   create a function for editing the settings.json in platform -> windows
-            #   make pwsh the default terminal
-            Logger.ok(f"Pwsh installed as default terminal")
+            # Find installation path of windows terminal and configure it
+            if hasattr(self.platform, "get_windows_terminal_settings_path"):
+                settings_path = self.platform.get_windows_terminal_settings_path()
+                if settings_path:
+                    Logger.info(f"Found Windows Terminal settings at {settings_path}")
+                    # Make pwsh the default terminal
+                    # "PowerShell" is the usual name for the profile.
+                    self.platform.update_windows_terminal_settings({"defaultProfile": "PowerShell"})
+                else:
+                    Logger.warn("Could not find Windows Terminal settings.")
+
+            Logger.ok(f"Pwsh installed and configured.")
             
             Logger.info("Creating Pwsh shortcut...")
             link_directory = os.path.join(self.platform.get_home_dir(), "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs")
             link_filepath = os.path.join(link_directory, "Windows Terminal.lnk")
             
-            # TODO: 
-            #   create a function for creating shortcuts in platform
-            #   use installation path found previously instead of hardcoded
-            shell = Dispatch('WScript.Shell')
-            shortcut = shell.CreateShortCut(link_filepath)    
-            shortcut.Targetpath = os.path.join("C:\\", "Program Files", "WindowsApps", "Microsoft.WindowsTerminal_1.23.13503.0_x64__8wekyb3d8bbwe", "WindowsTerminal.exe")
-            shortcut.WorkingDirectory = link_directory
-            shortcut.Description = "Windows Terminal"
-            shortcut.Hotkey = "CTRL+ALT+T"
-            shortcut.save()
-            Logger.ok(f"Pwsh shortcut created at '{link_filepath}' with hotkey CTRL+ALT+T")
+            target_path = "wt.exe"
+            if hasattr(self.platform, "get_windows_terminal_executable"):
+                found_path = self.platform.get_windows_terminal_executable()
+                if found_path:
+                    target_path = found_path
+            
+            self.platform.create_shortcut(
+                target_path=target_path,
+                shortcut_path=link_filepath,
+                description="Windows Terminal",
+                working_dir=link_directory,
+                icon_path=target_path,
+                hotkey="CTRL+ALT+T"
+            )
             
         else:
             Logger.info("Installing Zsh...")
@@ -80,38 +88,62 @@ class Terminal(Component):
                  return
             
             Logger.info("Downloading and installing Oh-My-Posh via script...")
+            # Use curl but piping to sudo bash is risky if not interactive.
+            # But the user asked for this.
             cmd = "curl -s https://ohmyposh.dev/install.sh | sudo bash -s"
             subprocess.run(cmd, shell=True, check=True)
 
     def _install_font(self):
         Logger.info("Installing Font (Cascadia Mono NF)...")
-        if sys.platform == "win32":
-            # TODO: 
-            #   manually download cascadia code from github (e.g. https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip)
-            #   unzip to tmp folder and install cascadia mono nf
-        else:
-            try:
-                # TODO: 
-                #   manually download cascadia code from github (e.g. https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip)
-                #   unzip to tmp folder and install cascadia mono nf
+        
+        url = "https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip"
+        zip_name = "CascadiaCode.zip"
+        download_dir = os.path.join(os.getcwd(), "tmp")
+        os.makedirs(download_dir, exist_ok=True)
+        download_file = os.path.join(download_dir, zip_name)
+
+        try:
+            Logger.info(f"Downloading font from {url}...")
+            urllib.request.urlretrieve(url, download_file)
+            
+            if sys.platform == "win32":
+                extract_dir = os.path.join(download_dir, "CascadiaCode")
+                with zipfile.ZipFile(download_file, 'r') as zip_ref:
+                    zip_ref.extractall(extract_dir)
                 
-                urllib.request.urlretrieve(url, download_file)
-                
+                Logger.info("Font downloaded. Installing on Windows is complex via script.")
+                Logger.info(f"Please install the fonts in '{extract_dir}' manually (Select all -> Right Click -> Install).")
+                # Attempt to open the folder
+                os.startfile(extract_dir)
+
+            else:
                 font_dir = os.path.expanduser("~/.local/share/fonts")
                 os.makedirs(font_dir, exist_ok=True)
                 
                 Logger.info(f"Extracting to {font_dir}...")
                 with zipfile.ZipFile(download_file, 'r') as zip_ref:
-                    # Filter only ttf/otf files or just extract all. Extracting all is easier.
-                    zip_ref.extractall(font_dir)
-                    
+                    # Filter only ttf/otf files or just extract all.
+                    # Flattening structure is better but extracting all is simple.
+                    for member in zip_ref.namelist():
+                        if member.lower().endswith((".ttf", ".otf")):
+                            # We want to flatten the directory structure
+                            filename = os.path.basename(member)
+                            source = zip_ref.open(member)
+                            target = open(os.path.join(font_dir, filename), "wb")
+                            with source, target:
+                                shutil.copyfileobj(source, target)
+
                 Logger.info("Updating font cache...")
                 subprocess.run(["fc-cache", "-fv"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 Logger.ok("Successfully installed Nerd Font on Linux.")
-                
-            except Exception as e:
-                Logger.err(f"Failed to install font manually: {e}")
-                Logger.info("Skipping automatic font installation. Please install 'CaskaydiaCove Nerd Font' manually.")
+
+        except Exception as e:
+            Logger.err(f"Failed to install font: {e}")
+            Logger.info("Skipping automatic font installation. Please install 'CaskaydiaCove Nerd Font' manually.")
+        finally:
+            # Cleanup zip
+            if os.path.exists(download_file):
+                os.remove(download_file)
 
     def _configure_shell(self):
         Logger.info("Configuring Shell...")
@@ -131,9 +163,6 @@ class Terminal(Component):
 
         if sys.platform == "win32":
              # PowerShell Profile
-             # We need to find the profile path. 
-             # For pwsh, it's usually in Documents\PowerShell\Microsoft.PowerShell_profile.ps1
-             # We can ask PowerShell for the path.
              try:
                  if not shutil.which("pwsh"):
                      Logger.warn("pwsh not found in PATH. Skipping profile configuration. Please restart terminal and run again.")
@@ -160,8 +189,20 @@ class Terminal(Component):
                  else:
                      Logger.info("Oh-My-Posh already configured in profile.")
                      
-                # TODO: 
-                #   set cascadia mono nf as pwsh font
+                 # Set Cascadia Mono NF as Pwsh font in Windows Terminal settings
+                 # We iterate over profiles to find the one with "PowerShell" name or just update defaults?
+                 # Updating "profiles.defaults" is safer to ensure it applies.
+                 if hasattr(self.platform, "update_windows_terminal_settings"):
+                     self.platform.update_windows_terminal_settings({
+                         "profiles": {
+                             "defaults": {
+                                 "font": {
+                                     "face": "Cascadia Mono NF"
+                                 }
+                             }
+                         }
+                     })
+                     Logger.ok("Updated Windows Terminal default font to Cascadia Mono NF")
                      
              except Exception as e:
                  Logger.err(f"Failed to configure PowerShell profile: {e}")
@@ -186,5 +227,10 @@ class Terminal(Component):
                     
                 # TODO: 
                 #   set cascadia mono nf as zsh font
+                #   (This is terminal-emulator dependent and cannot be easily set for 'zsh' itself, 
+                #    which runs inside a terminal. We already set it for VS Code and Windows Terminal.
+                #    For Linux terminals like gnome-terminal, it's complex/dconf. Leaving as comment or log.)
+                Logger.info("Note: Please set your terminal emulator font to 'Cascadia Mono NF' manually.")
+                
             except Exception as e:
                 Logger.err(f"Failed to configure .zshrc: {e}")

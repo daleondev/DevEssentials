@@ -90,5 +90,8 @@ class Platform(ABC):
 
         bindings.append(keybinding)
         self._save_vscode_keybindings(bindings)
-        """Returns the user's home directory."""
+
+    @abstractmethod
+    def create_shortcut(self, target_path: str, shortcut_path: str, description: str = "", icon_path: str = "", working_dir: str = "", hotkey: str = "") -> None:
+        """Creates a system shortcut."""
         pass
