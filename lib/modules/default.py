@@ -27,6 +27,7 @@ class Default(Component):
             self.platform.add_vscode_setting("editor.lineNumbers", "relative")
             self.platform.add_vscode_setting("editor.formatOnSave", True)
             self.platform.add_vscode_setting("workbench.activityBar.location", "hidden")
+            self.platform.add_vscode_setting("editor.stickyScroll.enabled", False)
                                              
             self.platform.install_vscode_extension("tomphilbin.gruvbox-themes")
             self.platform.add_vscode_setting("workbench.colorTheme", "Gruvbox Dark (Hard)")
