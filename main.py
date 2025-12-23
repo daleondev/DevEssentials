@@ -43,15 +43,15 @@ Use command line arguments to specify additional installations (use --help for h
         Logger.err(str(e))
         sys.exit(1)
 
-    # Default(platform).install()
+    Default(platform).install()
 
     if args.with_terminal or args.full:
         terminal_component = Terminal(platform)
         terminal_component.install()
         
-    # if args.with_neovim or args.full:
-    #     neovim_component = Neovim(platform)
-    #     neovim_component.install()
+    if args.with_neovim or args.full:
+        neovim_component = Neovim(platform)
+        neovim_component.install()
 
     # if args.with_build_tools or args.full:
     #     build_tools_component = BuildTools(platform)

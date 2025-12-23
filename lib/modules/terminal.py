@@ -174,8 +174,41 @@ VI_MODE_SET_CURSOR=true
 
         Logger.ok("Successfully configured Oh-My-Zsh")
 
+    def _check_font_installed(self) -> bool:
+        """Checks if Cascadia Mono NF is already installed."""
+        if sys.platform == "win32":
+            # Check standard Windows Fonts directory
+            # Windows fonts can be installed in %WINDIR%\Fonts or %LOCALAPPDATA%\Microsoft\Windows\Fonts
+            fonts_dirs = [
+                os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts"),
+                os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "Windows", "Fonts")
+            ]
+            
+            # Simple check for filename existence as a proxy
+            # CascadiaCode usually installs as 'CascadiaCode*.ttf'
+            for directory in fonts_dirs:
+                if os.path.exists(directory):
+                    for f in os.listdir(directory):
+                        if "CascadiaMonoNF" in f or "CascadiaCodeNF" in f:
+                            return True
+            return False
+            
+        else:
+            # Linux: Use fc-list
+            if not shutil.which("fc-list"):
+                return False
+            try:
+                output = subprocess.check_output(["fc-list", ":family"], text=True)
+                return self.FONT_NAME in output
+            except Exception:
+                return False
+
     def _install_font(self) -> None:
         """Downloads and installs Cascadia Mono NF font."""
+        if self._check_font_installed():
+            Logger.info(f"Font '{self.FONT_NAME}' is already installed.")
+            return
+
         Logger.info(f"Installing Font ({self.FONT_NAME})...")
         
         zip_name = "CascadiaCode.zip"

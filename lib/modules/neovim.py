@@ -3,6 +3,7 @@ import shutil
 import urllib.request
 import zipfile
 import sys
+import json
 from lib.modules.base import Component
 from lib.core.packages import KnownPackage
 from lib.utils.logger import Logger
@@ -10,55 +11,65 @@ from lib.utils.logger import Logger
 class Neovim(Component):
     def install(self) -> None:
         try:
-            Logger.info("Installing Neovim...")
-            
-            if sys.platform == "win32":
-                url = "https://github.com/neovim/neovim/releases/download/v0.11.5/nvim-win64.zip"
-                archive_name = "nvim.zip"
-                
-                download_path = os.path.join(os.getcwd(), "tmp")
-                download_file = os.path.join(download_path, archive_name)
-                os.makedirs(download_path, exist_ok=True)
-                
-                Logger.info(f"Downloading {url}...")
-                urllib.request.urlretrieve(url, download_file)
-                
-                install_path = os.path.join(self.platform.get_home_dir(), "nvim")
-                if os.path.exists(install_path):
-                    shutil.rmtree(install_path)
-                os.mkdir(install_path)
-                
-                Logger.info("Extracting...")
-                with zipfile.ZipFile(download_file, 'r') as zip_ref:
-                    zip_ref.extractall(install_path)
-                
-                # Zip contains 'nvim-win64' folder
-                bin_path = os.path.join(install_path, "nvim-win64", "bin")
-                
-                Logger.info(f"Adding {bin_path} to PATH...")
-                self.platform.add_to_path(bin_path)
-                    
-                Logger.ok("Successfully installed Neovim binary")
-                
-            elif sys.platform == "linux":
-                self.platform.install_package(KnownPackage.NEOVIM)
-                Logger.ok("Successfully installed Neovim via package manager")
-                
-            else:
-                Logger.err(f"Neovim installation not supported on {sys.platform}")
-                return
-            
-            Logger.info("Installing VSCode Neovim extension...")
-            self.platform.install_vscode_extension("asvetliakov.vscode-neovim")
-            Logger.ok("Successfully installed VSCode Neovim extension")
-
+            self._install_neovim()
+            self._install_vscode_extension()
             self._configure_neovim()
-            
+            self._configure_vscode_keybindings()
+            Logger.ok("Neovim setup completed successfully.")
         except Exception as e:
             Logger.err(f"Failed to install Neovim: {e}")
             raise
 
-    def _configure_neovim(self):
+    def _install_neovim(self) -> None:
+        Logger.info("Installing Neovim...")
+        
+        if sys.platform == "win32":
+            self._install_neovim_windows()
+        elif sys.platform == "linux":
+            self.platform.install_package(KnownPackage.NEOVIM)
+            Logger.ok("Successfully installed Neovim via package manager")
+        else:
+            Logger.err(f"Neovim installation not supported on {sys.platform}")
+            raise NotImplementedError(f"Unsupported platform: {sys.platform}")
+
+    def _install_neovim_windows(self) -> None:
+        url = "https://github.com/neovim/neovim/releases/download/v0.11.5/nvim-win64.zip"
+        archive_name = "nvim.zip"
+        
+        download_path = os.path.join(os.getcwd(), "tmp")
+        download_file = os.path.join(download_path, archive_name)
+        os.makedirs(download_path, exist_ok=True)
+        
+        Logger.info(f"Downloading {url}...")
+        try:
+            urllib.request.urlretrieve(url, download_file)
+            
+            install_path = os.path.join(self.platform.get_home_dir(), "nvim")
+            if os.path.exists(install_path):
+                shutil.rmtree(install_path)
+            os.mkdir(install_path)
+            
+            Logger.info("Extracting...")
+            with zipfile.ZipFile(download_file, 'r') as zip_ref:
+                zip_ref.extractall(install_path)
+            
+            # Zip contains 'nvim-win64' folder
+            bin_path = os.path.join(install_path, "nvim-win64", "bin")
+            
+            Logger.info(f"Adding {bin_path} to PATH...")
+            self.platform.add_to_path(bin_path)
+                
+            Logger.ok("Successfully installed Neovim binary")
+        finally:
+            if os.path.exists(download_file):
+                os.remove(download_file)
+
+    def _install_vscode_extension(self) -> None:
+        Logger.info("Installing VSCode Neovim extension...")
+        self.platform.install_vscode_extension("asvetliakov.vscode-neovim")
+        Logger.ok("Successfully installed VSCode Neovim extension")
+
+    def _configure_neovim(self) -> None:
         Logger.info("Configuring Neovim...")
         
         if sys.platform == "win32":
@@ -69,152 +80,49 @@ class Neovim(Component):
             config_dir = os.path.join(self.platform.get_home_dir(), ".config", "nvim")
             
         os.makedirs(config_dir, exist_ok=True)
-        init_lua_path = os.path.join(config_dir, "init.lua")
+        init_lua_target = os.path.join(config_dir, "init.lua")
         
-        config_content = """-- Default init.lua generated by DevEssentials
-
--- Set leader key to space
-vim.g.mapleader = " "
-
--- Basic settings
-vim.opt.number = true
-vim.opt.relativenumber = true
-vim.opt.wrap = false
-vim.opt.tabstop = 4
-vim.opt.shiftwidth = 4
-vim.opt.expandtab = true
-vim.opt.smartindent = true
-vim.opt.signcolumn = "yes"
-vim.opt.swapfile = false
-vim.opt.cursorline = true
-vim.opt.winborder = "rounded"
-vim.opt.ignorecase = true
-vim.opt.smartcase = true
-
-if vim.g.vscode then
-    local vscode = require('vscode')
-    local function code_action(cmd)
-        return function() vscode.call(cmd) end
-    end
-
-    -- NAVIGATION -----------------------------------------------------------
-    
-    -- Switch buffers (Mapped to VS Code tabs)
-    vim.keymap.set('n', '<S-h>', code_action('workbench.action.previousEditor'))
-    vim.keymap.set('n', '<S-l>', code_action('workbench.action.nextEditor'))
-
-    -- Splits
-    vim.keymap.set('n', '<leader>v', code_action('workbench.action.splitEditor'))
-    vim.keymap.set('n', '<leader>s', code_action('workbench.action.splitEditorDown'))
-
-    -- Panes / Window Groups
-    vim.keymap.set('n', '<leader>h', code_action('workbench.action.focusLeftGroup'))
-    vim.keymap.set('n', '<leader>j', code_action('workbench.action.focusBelowGroup'))
-    vim.keymap.set('n', '<leader>k', code_action('workbench.action.focusAboveGroup'))
-    vim.keymap.set('n', '<leader>l', code_action('workbench.action.focusRightGroup'))
-
-    -- NICE TO HAVE ---------------------------------------------------------
-    
-    -- Save and Quit
-    vim.keymap.set('n', '<leader>w', code_action('workbench.action.files.save')) -- :w!
-    vim.keymap.set('n', '<leader>q', code_action('workbench.action.closeActiveEditor')) -- :q!
-    vim.keymap.set('n', '<leader>x', function() -- :x! (Save and Close)
-        vscode.call('workbench.action.files.save')
-        vscode.call('workbench.action.closeActiveEditor')
-    end)
-
-    -- Diagnostics (Error navigation)
-    vim.keymap.set('n', '[d', code_action('editor.action.marker.prev'))
-    vim.keymap.set('n', ']d', code_action('editor.action.marker.next'))
-
-    -- Code Actions / Quick Fix
-    vim.keymap.set('n', '<leader>ca', code_action('editor.action.quickFix'))
-
-    -- File Search (Quick Open)
-    vim.keymap.set('n', '<leader>f', code_action('workbench.action.quickOpen'))
-
-    -- Formatting
-    vim.keymap.set('n', '<leader>lf', code_action('editor.action.formatDocument'))
-
-    -- Hover Definition
-    vim.keymap.set('n', 'gh', code_action('editor.action.showDefinitionPreviewHover'))
-
-    -- VISUAL MODE MAPPINGS -------------------------------------------------
-    
-    -- Stay in visual mode while indenting
-    vim.keymap.set('v', '<', code_action('editor.action.outdentLines'))
-    vim.keymap.set('v', '>', code_action('editor.action.indentLines'))
-
-    -- Move selected lines up/down
-    vim.keymap.set('v', 'J', code_action('editor.action.moveLinesDownAction'))
-    vim.keymap.set('v', 'K', code_action('editor.action.moveLinesUpAction'))
-
-    -- Toggle Comment
-    vim.keymap.set('v', '<leader>c', code_action('editor.action.commentLine'))
-else
-    -- NAVIGATION -----------------------------------------------------------
-
-    -- Switch buffers (Mapped to previous/next buffer)
-    vim.keymap.set('n', '<S-h>', '<cmd>bprevious<CR>', { desc = "Previous Buffer" })
-    vim.keymap.set('n', '<S-l>', '<cmd>bnext<CR>', { desc = "Next Buffer" })
-
-    -- Splits
-    vim.keymap.set('n', '<leader>v', '<cmd>vsplit<CR>', { desc = "Vertical Split" })
-    vim.keymap.set('n', '<leader>s', '<cmd>split<CR>', { desc = "Horizontal Split" })
-
-    -- Panes / Window Groups (Standard Vim window navigation)
-    vim.keymap.set('n', '<leader>h', '<C-w>h', { desc = "Focus Left" })
-    vim.keymap.set('n', '<leader>j', '<C-w>j', { desc = "Focus Down" })
-    vim.keymap.set('n', '<leader>k', '<C-w>k', { desc = "Focus Up" })
-    vim.keymap.set('n', '<leader>l', '<C-w>l', { desc = "Focus Right" })
-
-    -- NICE TO HAVE ---------------------------------------------------------
-
-    -- Save and Quit
-    vim.keymap.set('n', '<leader>w', '<cmd>w<CR>', { desc = "Save" })
-    vim.keymap.set('n', '<leader>q', '<cmd>q<CR>', { desc = "Quit" })
-    vim.keymap.set('n', '<leader>x', '<cmd>x<CR>', { desc = "Save and Quit" })
-
-    -- Diagnostics (Using built-in Neovim diagnostic API)
-    vim.keymap.set('n', '[d', vim.diagnostic.goto_prev, { desc = "Previous Diagnostic" })
-    vim.keymap.set('n', ']d', vim.diagnostic.goto_next, { desc = "Next Diagnostic" })
-
-    -- Code Actions (Using built-in LSP)
-    vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { desc = "Code Action" })
-
-    -- File Search (Assuming Telescope is installed - replace with your picker)
-    vim.keymap.set('n', '<leader>f', '<cmd>Telescope find_files<CR>', { desc = "Find Files" })
-
-    -- Formatting (Using built-in LSP)
-    vim.keymap.set('n', '<leader>lf', vim.lsp.buf.format, { desc = "Format Document" })
-
-    -- Hover Definition (Using built-in LSP)
-    vim.keymap.set('n', 'gh', vim.lsp.buf.hover, { desc = "Hover Documentation" })
-
-    -- VISUAL MODE MAPPINGS -------------------------------------------------
-
-    -- Stay in visual mode while indenting (The 'gv' command reselects the last area)
-    vim.keymap.set('v', '<', '<gv', { desc = "Outdent" })
-    vim.keymap.set('v', '>', '>gv', { desc = "Indent" })
-
-    -- Move selected lines up/down (Magic Vim incantations)
-    -- This moves the selection, re-indents it (=), and keeps selection (gv)
-    vim.keymap.set('v', 'J', ":m '>+1<CR>gv=gv", { desc = "Move Selection Down" })
-    vim.keymap.set('v', 'K', ":m '<-2<CR>gv=gv", { desc = "Move Selection Up" })
-
-    -- Toggle Comment 
-    -- (Neovim 0.10+ has built-in commenting via 'gcc', but here is a manual map)
-    -- If you use 'numToStr/Comment.nvim', use the plugin command instead.
-    vim.keymap.set('v', '<leader>c', 'gc', { remap = true, desc = "Toggle Comment" })
-end
-"""
+        init_lua_source = os.path.join(os.getcwd(), "files", "init.lua")
         
-        if not os.path.exists(init_lua_path):
+        if os.path.exists(init_lua_source):
             try:
-                with open(init_lua_path, "w", encoding="utf-8") as f:
-                    f.write(config_content)
-                Logger.ok(f"Created default init.lua at {init_lua_path}")
+                shutil.copy2(init_lua_source, init_lua_target)
+                Logger.ok(f"Copied init.lua to {init_lua_target}")
             except Exception as e:
-                Logger.warn(f"Failed to create init.lua: {e}")
+                Logger.warn(f"Failed to copy init.lua: {e}")
         else:
-            Logger.info(f"init.lua already exists at {init_lua_path}, skipping creation.")
+            Logger.warn(f"Source init.lua not found at {init_lua_source}")
+
+    def _configure_vscode_keybindings(self) -> None:
+        """Installs Neovim-specific keybindings from files/keybindings.json."""
+        Logger.info("Configuring VS Code Neovim keybindings...")
+        keybindings_source = os.path.join(os.getcwd(), "files", "keybindings.json")
+        
+        if not os.path.exists(keybindings_source):
+            Logger.warn(f"Keybindings file not found at {keybindings_source}")
+            return
+
+        try:
+            with open(keybindings_source, "r", encoding="utf-8") as f:
+                content = f.read()
+                # Basic comment stripping
+                lines = [line for line in content.splitlines() if not line.strip().startswith("//")]
+                keybindings = json.loads("\n".join(lines))
+            
+            # Filter for neovim specific bindings
+            neovim_bindings = [
+                kb for kb in keybindings 
+                if "neovim" in kb.get("when", "") or "neovim" in kb.get("command", "")
+            ]
+            
+            count = 0
+            for binding in neovim_bindings:
+                self.platform.add_vscode_keybinding(binding)
+                count += 1
+                
+            Logger.ok(f"Configured {count} Neovim keybindings for VS Code.")
+            
+        except json.JSONDecodeError as e:
+            Logger.warn(f"Failed to parse keybindings.json: {e}")
+        except Exception as e:
+            Logger.warn(f"Failed to configure keybindings: {e}")

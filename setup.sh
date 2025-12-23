@@ -42,7 +42,7 @@ echo -e "${CYAN}[INFO] Handing over to installation script...${NC}"
 echo -e "${CYAN}========================================================${NC}"
 echo
 
-python3 lib/main.py "$@"
+python3 main.py "$@"
 
 EXIT_CODE=$?
 

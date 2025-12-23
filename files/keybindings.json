@@ -1,6 +1,4 @@
-// Place your key bindings in this file to override the defaults
 [
-    // NAVIGATION
     {
         "key": "ctrl+shift+alt+t",
         "command": "workbench.action.terminal.toggleTerminal"
@@ -25,7 +23,6 @@
         "command": "workbench.action.terminal.kill",
         "when": "terminalFocus"
     },
-    // FILE TREE
     {
         "command": "workbench.action.toggleSidebarVisibility",
         "key": "ctrl+shift+alt+e",
@@ -82,36 +79,34 @@
         "command": "list.collapse",
         "when": "filesExplorerFocus && !inputFocus && explorerResourceIsFolder"
     },
-    // EXTRA
     {
         "key": "ctrl+shift+alt+z",
         "command": "workbench.action.toggleZenMode"
     },
-    // NVIM
     {
         "command": "editor.action.outdentLines",
         "key": "shift+tab",
-        "when": "editorTextFocus && neovim.init && neovim.mode != insert",
+        "when": "editorTextFocus && neovim.init && neovim.mode != insert"
     },
     {
         "command": "editor.action.indentLines",
         "key": "tab",
-        "when": "editorTextFocus && neovim.init && neovim.mode != insert",
+        "when": "editorTextFocus && neovim.init && neovim.mode != insert"
     },
     {
         "command": "editor.action.clipboardCopyAction",
         "key": "ctrl+c",
-        "when": "editorTextFocus && neovim.init",
+        "when": "editorTextFocus && neovim.init"
     },
     {
         "command": "editor.action.clipboardCutAction",
         "key": "ctrl+x",
-        "when": "editorTextFocus && neovim.init",
+        "when": "editorTextFocus && neovim.init"
     },
     {
         "command": "editor.action.clipboardPasteAction",
         "key": "ctrl+v",
-        "when": "editorTextFocus && neovim.init && neovim.mode == insert",
+        "when": "editorTextFocus && neovim.init && neovim.mode == insert"
     },
     {
         "key": "ctrl+f",
