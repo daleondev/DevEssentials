@@ -1,0 +1,126 @@
+// Place your key bindings in this file to override the defaults
+[
+    // NAVIGATION
+    {
+        "key": "ctrl+shift+alt+t",
+        "command": "workbench.action.terminal.toggleTerminal"
+    },
+    {
+        "key": "ctrl+shift+alt+down",
+        "command": "workbench.action.terminal.focusNext",
+        "when": "terminalFocus"
+    },
+    {
+        "key": "ctrl+shift+alt+up",
+        "command": "workbench.action.terminal.focusPrevious",
+        "when": "terminalFocus"
+    },
+    {
+        "key": "ctrl+shift+alt+right",
+        "command": "workbench.action.terminal.new",
+        "when": "terminalFocus"
+    },
+    {
+        "key": "ctrl+shift+alt+left",
+        "command": "workbench.action.terminal.kill",
+        "when": "terminalFocus"
+    },
+    // FILE TREE
+    {
+        "command": "workbench.action.toggleSidebarVisibility",
+        "key": "ctrl+shift+alt+e",
+        "when": "!editorTextFocus"
+    },
+    {
+        "command": "workbench.files.action.focusFilesExplorer",
+        "key": "ctrl+shift+alt+e",
+        "when": "editorTextFocus"
+    },
+    {
+        "key": "n",
+        "command": "explorer.newFile",
+        "when": "filesExplorerFocus && !inputFocus"
+    },
+    {
+        "command": "renameFile",
+        "key": "r",
+        "when": "filesExplorerFocus && !inputFocus"
+    },
+    {
+        "key": "shift+n",
+        "command": "explorer.newFolder",
+        "when": "filesExplorerFocus && !inputFocus"
+    },
+    {
+        "command": "deleteFile",
+        "key": "d",
+        "when": "filesExplorerFocus && !inputFocus"
+    },
+    {
+        "key": "space",
+        "command": "runCommands",
+        "args": {
+            "commands": [
+                "filesExplorer.openFilePreserveFocus",
+                "workbench.action.keepEditor"
+            ]
+        },
+        "when": "filesExplorerFocus && !inputFocus && !explorerResourceIsFolder"
+    },
+    {
+        "key": "l",
+        "command": "explorer.openAndPassFocus",
+        "when": "filesExplorerFocus && !inputFocus && !explorerResourceIsFolder"
+    },
+    {
+        "key": "l",
+        "command": "list.expand",
+        "when": "filesExplorerFocus && !inputFocus && explorerResourceIsFolder"
+    },
+    {
+        "key": "h",
+        "command": "list.collapse",
+        "when": "filesExplorerFocus && !inputFocus && explorerResourceIsFolder"
+    },
+    // EXTRA
+    {
+        "key": "ctrl+shift+alt+z",
+        "command": "workbench.action.toggleZenMode"
+    },
+    // NVIM
+    {
+        "command": "editor.action.outdentLines",
+        "key": "shift+tab",
+        "when": "editorTextFocus && neovim.init && neovim.mode != insert",
+    },
+    {
+        "command": "editor.action.indentLines",
+        "key": "tab",
+        "when": "editorTextFocus && neovim.init && neovim.mode != insert",
+    },
+    {
+        "command": "editor.action.clipboardCopyAction",
+        "key": "ctrl+c",
+        "when": "editorTextFocus && neovim.init",
+    },
+    {
+        "command": "editor.action.clipboardCutAction",
+        "key": "ctrl+x",
+        "when": "editorTextFocus && neovim.init",
+    },
+    {
+        "command": "editor.action.clipboardPasteAction",
+        "key": "ctrl+v",
+        "when": "editorTextFocus && neovim.init && neovim.mode == insert",
+    },
+    {
+        "key": "ctrl+f",
+        "command": "actions.find",
+        "when": "(editorTextFocus || editorFocus) && neovim.init"
+    },
+    {
+        "key": "ctrl+h",
+        "command": "editor.action.startFindReplaceAction",
+        "when": "(editorTextFocus || editorFocus) && neovim.init"
+    }
+]

@@ -34,6 +34,10 @@ class Default(Component):
             
             self.platform.install_vscode_extension("s-nlf-fh.glassit")
             self.platform.add_vscode_setting("glassit.alpha", 250)
+            
+            self.platform.install_vscode_extension("ms-python.python")
+            self.platform.install_vscode_extension("ms-python.debugpy")
+            self.platform.install_vscode_extension("ms-python.vscode-pylance")
             Logger.ok("Successfully configured VS-Code")
 
             Logger.ok("Successfully installed default applications")
