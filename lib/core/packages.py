@@ -7,7 +7,7 @@ class PackageId:
     linux: str
 
 class KnownPackage(Enum):
-    VS_CODE = PackageId(win="Microsoft.VisualStudioCode", linux="None")
+    VS_CODE = PackageId(win="Microsoft.VisualStudioCode", linux="code")
     GIT = PackageId(win="Microsoft.Git", linux="git")
     NEOVIM = PackageId(win="Neovim.Neovim", linux="neovim")
     POWERSHELL = PackageId(win="Microsoft.PowerShell", linux="powershell")
@@ -18,6 +18,4 @@ class KnownPackage(Enum):
     NINJA = PackageId(win="None", linux="ninja-build")
     WGET = PackageId(win="JernejSimoncic.Wget", linux="wget")
     KEEPASS = PackageId(win="DominikReichl.KeePass", linux="keepass2")
-
-
-
+    TMUX = PackageId(win="None", linux="tmux")

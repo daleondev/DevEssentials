@@ -1,3 +1,5 @@
+import sys
+import subprocess
 from lib.modules.base import Component
 from lib.core.packages import KnownPackage
 from lib.utils.logger import Logger
@@ -12,6 +14,22 @@ class Default(Component):
             
             # 2. Install VS Code
             Logger.info("Installing VS-Code...")
+            if sys.platform != "win32":
+                subprocess.run(r'echo "code code/add-microsoft-repo boolean true" | sudo debconf-set-selections', shell=True, check=True)
+                subprocess.run("sudo apt-get install wget gpg", shell=True, check=True)
+                subprocess.run("wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg", shell=True, check=True)
+                subprocess.run("sudo install -D -o root -g root -m 644 microsoft.gpg /usr/share/keyrings/microsoft.gpg", shell=True, check=True)
+                subprocess.run("rm -f microsoft.gpg", shell=True, check=True)
+                subprocess.run("""echo "Types: deb
+URIs: https://packages.microsoft.com/repos/code
+Suites: stable
+Components: main
+Architectures: amd64,arm64,armhf
+Signed-By: /usr/share/keyrings/microsoft.gpg
+" | sudo tee /etc/apt/sources.list.d/vscode.list > /dev/null
+""", shell=True, check=True)
+                subprocess.run("sudo apt install apt-transport-https && sudo apt update", shell=True, check=True)
+                
             self.platform.install_package(KnownPackage.VS_CODE)
             Logger.ok("Successfully installed VS-Code")
 
