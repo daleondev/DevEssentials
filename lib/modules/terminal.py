@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import urllib.request
 import zipfile
+import json
 from lib.modules.base import Component
 from lib.core.packages import KnownPackage
 from lib.utils.logger import Logger
@@ -14,7 +15,7 @@ class Terminal(Component):
             self._install_shell()
             self._install_oh_my_xxx()
             self._install_font()
-            # self._configure_shell()
+            self._configure_shell()
             Logger.ok("Terminal setup completed successfully.")
         except Exception as e:
             Logger.err(f"Terminal setup failed: {e}")
@@ -207,7 +208,45 @@ VI_MODE_SET_CURSOR=true
                 settings_path = self.platform.get_windows_terminal_settings_path()
                 if settings_path:
                     Logger.info(f"Found Windows Terminal settings at {settings_path}")
-                    self.platform.update_windows_terminal_settings({"defaultProfile": "PowerShell"})
+                    
+                    theme_json = """{
+                      "name": "GruvboxDarkHard",
+                      "black": "#1b1b1b",
+                      "red": "#cc241d",
+                      "green": "#98971a",
+                      "yellow": "#d79921",
+                      "blue": "#458588",
+                      "purple": "#b16286",
+                      "cyan": "#689d6a",
+                      "white": "#a89984",
+                      "brightBlack": "#928374",
+                      "brightRed": "#fb4934",
+                      "brightGreen": "#b8bb26",
+                      "brightYellow": "#fabd2f",
+                      "brightBlue": "#83a598",
+                      "brightPurple": "#d3869b",
+                      "brightCyan": "#8ec07c",
+                      "brightWhite": "#ebdbb2",
+                      "background": "#1b1b1b",
+                      "foreground": "#ebdbb2",
+                      "selectionBackground": "#665c54",
+                      "cursorColor": "#ebdbb2"
+                    }"""
+                    scheme = json.loads(theme_json)
+                    
+                    updates = {
+                        "defaultProfile": "PowerShell",
+                        "profiles": {
+                            "defaults": {
+                                "colorScheme": "GruvboxDarkHard",
+                                "font": {
+                                    "face": "Cascadia Mono NF"
+                                }
+                            }
+                        },
+                        "schemes": [scheme]
+                    }
+                    self.platform.update_windows_terminal_settings(updates)
                 else:
                     Logger.warn("Could not find Windows Terminal settings")
             Logger.ok(f"Windows Terminal configured")
@@ -232,4 +271,21 @@ VI_MODE_SET_CURSOR=true
             )
 
         else:
-            pass
+            Logger.info("Configuring Gnome Terminal...")
+            # Colors from Gruvbox Dark theme
+            gruvbox_palette = [
+                '#282828', '#CC241D', '#98971A', '#D79921', '#458588', '#B16286', '#689D6A', '#A89984',
+                '#928374', '#FB4934', '#B8BB26', '#FABD2F', '#83A598', '#D3869B', '#8EC07C', '#EBDBB2'
+            ]
+            
+            theme_data = {
+                "palette": gruvbox_palette,
+                "background": "#282828",
+                "foreground": "#EBDBB2",
+                "font": "Cascadia Mono NF 12",
+                "transparency_percent": 5
+            }
+            
+            if hasattr(self.platform, "configure_gnome_terminal"):
+                 self.platform.configure_gnome_terminal(theme_data)
+            

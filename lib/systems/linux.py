@@ -1,7 +1,7 @@
 import os
 import shutil
 import subprocess
-from typing import Union
+from typing import Union, Dict, Any
 from lib.systems.platform import Platform
 from lib.utils.logger import Logger
 from lib.core.packages import KnownPackage
@@ -104,3 +104,68 @@ Terminal=false
             Logger.ok(f"Created desktop entry at {shortcut_path}")
         except Exception as e:
             Logger.err(f"Failed to create desktop entry: {e}")
+
+    def configure_gnome_terminal(self, theme_data: Dict[str, Any]) -> None:
+        """Configures Gnome Terminal with the given theme data."""
+        if not shutil.which("dconf"):
+            Logger.warn("dconf not found. Skipping Gnome Terminal configuration.")
+            return
+
+        try:
+            # Get default profile UUID
+            # gsettings get org.gnome.Terminal.ProfilesList default
+            result = subprocess.check_output(
+                ["gsettings", "get", "org.gnome.Terminal.ProfilesList", "default"], 
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+            
+            # Result is usually "'<uuid>'"
+            profile_uuid = result.strip("'")
+            if not profile_uuid:
+                Logger.warn("Could not determine default Gnome Terminal profile.")
+                return
+
+            dconf_path = f"/org/gnome/terminal/legacy/profiles:/:{profile_uuid}/"
+            
+            Logger.info(f"Configuring Gnome Terminal profile {profile_uuid}...")
+
+            # Helper to set dconf value
+            def dconf_write(key, value):
+                subprocess.run(
+                    ["dconf", "write", f"{dconf_path}{key}", str(value)], 
+                    check=True, stderr=subprocess.DEVNULL
+                )
+
+            # Map theme data to dconf keys
+            # Palette
+            if "palette" in theme_data:
+                # dconf expects string array like "['#000000', '#ffffff']"
+                palette_str = "[" + ", ".join([f"'{c}'" for c in theme_data["palette"]]) + "]"
+                dconf_write("palette", palette_str)
+
+            if "background" in theme_data:
+                dconf_write("background-color", f"'{theme_data['background']}'")
+            
+            if "foreground" in theme_data:
+                dconf_write("foreground-color", f"'{theme_data['foreground']}'")
+
+            dconf_write("use-theme-colors", "false")
+            
+            # Font
+            if "font" in theme_data:
+                dconf_write("font", f"'{theme_data['font']}'")
+                dconf_write("use-system-font", "false")
+
+            # Transparency
+            # Assuming "opacity" in theme_data means 5% transparency -> value 5? 
+            # Or if key is "transparency_percent"
+            if "transparency_percent" in theme_data:
+                dconf_write("use-transparent-background", "true")
+                dconf_write("background-transparency-percent", str(theme_data["transparency_percent"]))
+
+            Logger.ok("Gnome Terminal configuration applied.")
+
+        except subprocess.CalledProcessError as e:
+            Logger.warn(f"Failed to configure Gnome Terminal: {e}")
+        except Exception as e:
+            Logger.err(f"An error occurred while configuring Gnome Terminal: {e}")

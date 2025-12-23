@@ -181,22 +181,42 @@ class WindowsPlatform(Platform):
                 # Use json.load, hoping no comments or valid JSON
                 content = json.load(f)
             
-            # Apply updates
-            # 'updates' is expected to be a dict of key-values to merge into the root or specific profiles.
-            # This is a simple merge. Complex merges (like finding a specific profile) need more logic.
-            # For this task, we need to:
-            # 1. Set default profile to pwsh (we need to find the pwsh profile GUID or set "defaultProfile": "PowerShell" if it accepts names - it usually needs a GUID).
-            # 2. Set fontFace for profiles.
-            
-            # If the user passed specific structure in 'updates', we merge it.
-            # But the caller (Terminal) will likely pass a dict reflecting the structure.
-            
-            # Example update: {"defaultProfile": "{guid}", "profiles": {"defaults": {"font": ...}}}
-            
-            # Helper for deep merge could be useful, but let's just do top level or specific handling if needed.
-            # For now, assumes 'updates' keys overwrite roots.
-            for k, v in updates.items():
-                content[k] = v
+            # Helper to merge dictionaries
+            def deep_merge(target, source):
+                for key, value in source.items():
+                    if isinstance(value, dict) and key in target and isinstance(target[key], dict):
+                        deep_merge(target[key], value)
+                    else:
+                        target[key] = value
+
+            # Handle schemes specifically: Append if not exists
+            if "schemes" in updates and isinstance(updates["schemes"], list):
+                existing_schemes = content.get("schemes", [])
+                existing_names = {s.get("name") for s in existing_schemes}
+                
+                for scheme in updates["schemes"]:
+                    if scheme.get("name") not in existing_names:
+                        existing_schemes.append(scheme)
+                        Logger.info(f"Added scheme: {scheme.get('name')}")
+                    else:
+                        # Update existing scheme? For now, we skip or overwrite?
+                        # Let's overwrite/update the existing one with same name
+                        for i, s in enumerate(existing_schemes):
+                            if s.get("name") == scheme.get("name"):
+                                existing_schemes[i] = scheme
+                                Logger.info(f"Updated scheme: {scheme.get('name')}")
+                                break
+                
+                content["schemes"] = existing_schemes
+                # Remove schemes from updates to avoid overwriting with the list again in the loop below if we processed it
+                # But since we're iterating 'updates' next, let's just copy 'updates' and remove 'schemes'
+                updates_copy = updates.copy()
+                del updates_copy["schemes"]
+            else:
+                updates_copy = updates
+
+            # Apply other updates
+            deep_merge(content, updates_copy)
                 
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump(content, f, indent=4)
