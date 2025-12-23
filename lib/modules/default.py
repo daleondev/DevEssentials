@@ -10,7 +10,6 @@ class Default(Component):
             # 1. Install Git
             Logger.info("Installing Git...")
             self.platform.install_package(KnownPackage.GIT)
-            Logger.ok("Successfully installed Git")
             
             # 2. Install VS Code
             Logger.info("Installing VS-Code...")
@@ -31,7 +30,6 @@ Signed-By: /usr/share/keyrings/microsoft.gpg
                 subprocess.run("sudo apt install apt-transport-https && sudo apt update", shell=True, check=True)
                 
             self.platform.install_package(KnownPackage.VS_CODE)
-            Logger.ok("Successfully installed VS-Code")
 
             # 3. Configure VS Code
             Logger.info("Configuring VS-Code...")
@@ -58,7 +56,7 @@ Signed-By: /usr/share/keyrings/microsoft.gpg
             self.platform.install_vscode_extension("ms-python.vscode-pylance")
             Logger.ok("Successfully configured VS-Code")
 
-            Logger.ok("Successfully installed default applications")
+            Logger.ok("Default setup completed successfully.")
             
         except Exception as e:
             Logger.err(f"Default installation failed: {e}")
