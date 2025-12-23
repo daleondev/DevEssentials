@@ -14,7 +14,7 @@ vim.opt.smartindent = true
 vim.opt.signcolumn = "yes"
 vim.opt.swapfile = false
 vim.opt.cursorline = true
-vim.opt.winborder = "rounded"
+--vim.opt.winborder = "rounded"
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
 

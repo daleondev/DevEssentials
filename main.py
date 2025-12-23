@@ -53,13 +53,13 @@ Use command line arguments to specify additional installations (use --help for h
         neovim_component = Neovim(platform)
         neovim_component.install()
 
-    # if args.with_build_tools or args.full:
-    #     build_tools_component = BuildTools(platform)
-    #     build_tools_component.install()
+    if args.with_build_tools or args.full:
+        build_tools_component = BuildTools(platform)
+        build_tools_component.install()
 
-    # if args.with_utils or args.full:
-    #     utils_component = Utils(platform)
-    #     utils_component.install()
+    if args.with_utils or args.full:
+        utils_component = Utils(platform)
+        utils_component.install()
 
 if __name__ == "__main__":
     main()
