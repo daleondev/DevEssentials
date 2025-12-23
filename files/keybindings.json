@@ -6,22 +6,22 @@
         "command": "workbench.action.terminal.toggleTerminal"
     },
     {
-        "key": "ctrl+shift+alt+down",
+        "key": "ctrl+shift+alt+pagedown",
         "command": "workbench.action.terminal.focusNext",
         "when": "terminalFocus"
     },
     {
-        "key": "ctrl+shift+alt+up",
+        "key": "ctrl+shift+alt+pageup",
         "command": "workbench.action.terminal.focusPrevious",
         "when": "terminalFocus"
     },
     {
-        "key": "ctrl+shift+alt+right",
+        "key": "ctrl+shift+alt+enter",
         "command": "workbench.action.terminal.new",
         "when": "terminalFocus"
     },
     {
-        "key": "ctrl+shift+alt+left",
+        "key": "ctrl+shift+alt+delete",
         "command": "workbench.action.terminal.kill",
         "when": "terminalFocus"
     },

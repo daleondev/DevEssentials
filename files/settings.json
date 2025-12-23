@@ -12,6 +12,5 @@
     "workbench.colorTheme": "Gruvbox Dark (Hard)",
     "glassit.alpha": 250,
     "editor.stickyScroll.enabled": false,
-    "vscode-neovim.neovimExecutablePaths.win32": "C:\\Users\\User\\nvim\\nvim-win64\\bin\\nvim.exe",
     "workbench.activityBar.location": "hidden"
 }
