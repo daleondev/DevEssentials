@@ -30,7 +30,7 @@ Use command line arguments to specify additional installations (use --help for h
 """
     )
     parser.add_argument("--full", action="store_true", help="Install everything (terminal, neovim, build-tools, utils)")
-    parser.add_argument("--with-terminal", action="store_true", help="Install pretty terminal (shell, shell-scheme, oh-my-posh, vscode-integration)")
+    parser.add_argument("--with-terminal", action="store_true", help="Install pretty terminal (shell, shell-theme, oh-my-posh/zsh, vscode-integration)")
     parser.add_argument("--with-neovim", action="store_true", help="Install Neovim (neovim, vscode-integration)")
     parser.add_argument("--with-build-tools", action="store_true", help="Install posix build tools (gcc, gdb, make, cmake, ...)")
     parser.add_argument("--with-utils", action="store_true", help="Install utilities (wget, keepass, ...)")
