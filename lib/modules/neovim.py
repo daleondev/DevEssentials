@@ -67,6 +67,8 @@ class Neovim(Component):
     def _install_vscode_extension(self) -> None:
         Logger.info("Installing VSCode Neovim extension...")
         self.platform.install_vscode_extension("asvetliakov.vscode-neovim")
+        if sys.platform == "win32":
+            self.platform.add_vscode_setting("vscode-neovim.neovimExecutablePaths.win32", os.path.join("C:\\", "Users", "Dev", "nvim", "nvim-win64", "bin", "nvim.exe"))
         Logger.ok("Successfully installed VSCode Neovim extension")
 
     def _configure_neovim(self) -> None:

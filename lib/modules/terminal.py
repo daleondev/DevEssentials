@@ -13,7 +13,7 @@ class Terminal(Component):
     FONT_URL = "https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip"
     FONT_NAME = "Cascadia Mono NF"
     
-    OMP_CONFIG_URL = "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_lean.omp.json"
+    OMP_CONFIG_URL = "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json"
     
     OMZ_INSTALL_SCRIPT_URL = "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"
     
@@ -134,7 +134,8 @@ VI_MODE_SET_CURSOR=true
             
             if "oh-my-posh init pwsh" not in content:
                 with open(profile_path, "a", encoding="utf-8") as f:
-                    f.write(f"\n{init_line}\n")
+                    f.write(f"{init_line}\n")
+                    f.write(f"cls\n")
                 Logger.ok(f"Added Oh-My-Posh init to {profile_path}")
             else:
                 Logger.info("Oh-My-Posh already configured in profile.")
