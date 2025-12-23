@@ -76,7 +76,7 @@ echo.
 echo %CYAN%========================================================%RESET%
 echo.
 
-python installation.py %*
+python main.py %*
 
 echo.
 echo %CYAN%========================================================

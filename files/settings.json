@@ -1,0 +1,16 @@
+{
+    "terminal.integrated.fontFamily": "Cascadia Mono NF",
+    "editor.fontFamily": "Cascadia Code",
+    "terminal.integrated.stickyScroll.enabled": false,
+    "editor.minimap.enabled": false,
+    "window.zoomLevel": 0.5,
+    "breadcrumbs.enabled": true,
+    "update.showReleaseNotes": false,
+    "zenMode.hideLineNumbers": false,
+    "editor.lineNumbers": "relative",
+    "editor.formatOnSave": true,
+    "workbench.colorTheme": "Gruvbox Dark (Hard)",
+    "glassit.alpha": 250,
+    "editor.stickyScroll.enabled": false,
+    "workbench.activityBar.location": "hidden"
+}
