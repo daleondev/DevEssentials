@@ -18,10 +18,10 @@ Running with `--with-terminal` configures the shell and terminal emulator.
 * Linux: Installs Zsh and Tmux. It sets up Oh-My-Zsh with the Powerlevel10k theme and common plugins like syntax highlighting and autosuggestions.
 
 ### Neovim
-The `--with-neovim` flag sets up a Neovim environment.
-* On Windows, it downloads the v0.11.5 binary and adds it to the user PATH.
-* On Linux, it uses the system package manager.
-* It installs the VS Code Neovim extension and copies a custom init.lua to the local config directory.
+The `--with-neovim` flag sets up a Neovim environment using **Bob** (the Neovim version manager).
+* Installs the `bob` version manager.
+* Uses `bob` to install and set up the latest stable release of Neovim.
+* Installs the VS Code Neovim extension and copies a custom init.lua to the local config directory.
 
 ### Build Tools
 The `--with-build-tools` flag installs compilers and build systems.

@@ -227,3 +227,35 @@ class WindowsPlatform(Platform):
             Logger.err(f"Failed to parse {path}. It might contain comments.")
         except Exception as e:
             Logger.err(f"Failed to update Windows Terminal settings: {e}")
+
+    def update_windows_terminal_profile(self, profile_name: str, settings: Dict[str, Any]) -> None:
+        path = self.get_windows_terminal_settings_path()
+        if not path: return
+        
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = json.load(f)
+            
+            profiles = content.get("profiles")
+            profile_list = []
+            if isinstance(profiles, list):
+                profile_list = profiles
+            elif isinstance(profiles, dict) and "list" in profiles:
+                profile_list = profiles["list"]
+            
+            updated = False
+            for p in profile_list:
+                if p.get("name") == profile_name:
+                    p.update(settings)
+                    updated = True
+                    break
+            
+            if updated:
+                with open(path, 'w', encoding='utf-8') as f:
+                    json.dump(content, f, indent=4)
+                Logger.ok(f"Updated Windows Terminal profile '{profile_name}'")
+            else:
+                Logger.warn(f"Profile '{profile_name}' not found in Windows Terminal settings.")
+                
+        except Exception as e:
+            Logger.err(f"Failed to update profile: {e}")

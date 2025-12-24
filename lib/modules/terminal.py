@@ -304,6 +304,10 @@ VI_MODE_SET_CURSOR=true
                     "schemes": [self.GRUVBOX_THEME_WIN]
                 }
                 self.platform.update_windows_terminal_settings(updates)
+                
+                if hasattr(self.platform, "update_windows_terminal_profile"):
+                     self.platform.update_windows_terminal_profile("PowerShell", {"opacity": 95})
+
             else:
                 Logger.warn("Could not find Windows Terminal settings")
         
