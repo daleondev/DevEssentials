@@ -42,6 +42,7 @@ class Neovim(Component):
             Logger.info("Running bob install script...")
             subprocess.run(install_cmd, shell=True, check=True)
             
+<<<<<<< HEAD
             if hasattr(self.platform, "refresh_windows_path"):
                 self.platform.refresh_windows_path()
 
@@ -59,6 +60,45 @@ class Neovim(Component):
             local_app_data = os.environ.get("LOCALAPPDATA")
             bob_nvim_bin = os.path.join(local_app_data, "bob", "nvim-bin")
             
+=======
+            # Bob installs to %USERPROFILE%\.bob\bin by default on Windows? Or usually just adds itself to path.
+            # The script should handle adding bob to PATH for current session if possible, but let's check.
+            # Usually we need to refresh environment or find where it is.
+            
+            # Common location: C:\Users\<User>\.bob\bin or C:\Users\<User>\AppData\Local\bob\bin?
+            # According to script, it installs to $HOME/.bob/bin by default unless configured.
+            user_profile = os.environ.get("USERPROFILE")
+            bob_bin = os.path.join(user_profile, ".bob", "bin")
+            
+            bob_exe = os.path.join(bob_bin, "bob.exe")
+            
+            if not os.path.exists(bob_exe):
+                # Try to find in path if script added it already (unlikely to propagate to this process instantly)
+                if shutil.which("bob"):
+                    bob_exe = "bob"
+                else:
+                    Logger.warn(f"Could not find bob at {bob_exe}. Attempting to proceed assuming it's in PATH or standard location.")
+            else:
+                 self.platform.add_to_path(bob_bin)
+
+            Logger.info("Installing latest stable Neovim via Bob...")
+            # Use full path if we found it, otherwise hope for PATH
+            cmd_base = bob_exe if os.path.exists(bob_exe) else "bob"
+            
+            subprocess.run([cmd_base, "install", "latest"], check=True)
+            subprocess.run([cmd_base, "use", "latest"], check=True)
+            
+            # Bob links nvim to nvim-bin inside .bob data folder?
+            # Actually on Windows, bob usually creates shims or adds the version path.
+            # 'bob use' should make 'nvim' available in the path managed by bob.
+            # We need to make sure that path is in our PATH.
+            
+            # Usually: %USERPROFILE%\.local\share\bob\nvim-bin on Linux
+            # On Windows: %USERPROFILE%\AppData\Local\bob\nvim-bin
+            local_app_data = os.environ.get("LOCALAPPDATA")
+            bob_nvim_bin = os.path.join(local_app_data, "bob", "nvim-bin")
+            
+>>>>>>> refs/remotes/origin/main
             self.platform.add_to_path(bob_nvim_bin)
             
             # Update VS Code setting
