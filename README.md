@@ -77,7 +77,7 @@ Here is what the environment looks like after installation.
 ### Linux
 
 **Terminal (Zsh + Powerlevel10k)**
-<!-- ![Linux Terminal](docs/Terminal_Linux.png) -->
+![Linux Terminal](docs/Terminal_Linux.png)
 *Screenshot coming soon*
 
 **VS Code**
