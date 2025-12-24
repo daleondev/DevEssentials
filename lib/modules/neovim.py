@@ -44,21 +44,16 @@ class Neovim(Component):
 
             if hasattr(self.platform, "refresh_windows_path"):
                 self.platform.refresh_windows_path()
-
-            Logger.info("Installing latest stable Neovim via Bob...")
-            subprocess.run(["bob", "install", "latest"], check=True)
-            subprocess.run(["bob", "use", "latest"], check=True)
-            
-            # Bob links nvim to nvim-bin inside .bob data folder?
-            # Actually on Windows, bob usually creates shims or adds the version path.
-            # 'bob use' should make 'nvim' available in the path managed by bob.
-            # We need to make sure that path is in our PATH.
-            
+                
             # Usually: %USERPROFILE%\.local\share\bob\nvim-bin on Linux
             # On Windows: %USERPROFILE%\AppData\Local\bob\nvim-bin
             local_app_data = os.environ.get("LOCALAPPDATA")
             bob_nvim_bin = os.path.join(local_app_data, "bob", "nvim-bin")
             self.platform.add_to_path(bob_nvim_bin)
+            
+            Logger.info("Installing latest stable Neovim via Bob...")
+            subprocess.run(["bob", "install", "latest"], check=True)
+            subprocess.run(["bob", "use", "latest"], check=True)
             
             # Update VS Code setting
             nvim_exe = os.path.join(bob_nvim_bin, "nvim.exe")
