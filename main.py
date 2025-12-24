@@ -16,7 +16,7 @@ def get_platform():
     elif sys.platform == "linux":
         return LinuxPlatform()
     else:
-        raise NotImplementedError(f"OS {sys.platform} not supported")
+        raise NotImplementedError(f"OS {sys.platform} not supported!")
 
 def main():
     parser = argparse.ArgumentParser(
