@@ -8,7 +8,7 @@ class PackageId:
 
 class KnownPackage(Enum):
     VS_CODE = PackageId(win="Microsoft.VisualStudioCode", linux="code")
-    GIT = PackageId(win="Microsoft.Git", linux="git")
+    GIT = PackageId(win="Git.Git", linux="git")
     NEOVIM = PackageId(win="Neovim.Neovim", linux="neovim")
     POWERSHELL = PackageId(win="Microsoft.PowerShell", linux="powershell")
     ZSH = PackageId(win="None", linux="zsh")
