@@ -259,7 +259,6 @@ class WindowsPlatform(Platform):
                 
         except Exception as e:
             Logger.err(f"Failed to update profile: {e}")
-<<<<<<< HEAD
 
     def refresh_windows_path(self):
         path_keys = [
@@ -291,5 +290,3 @@ class WindowsPlatform(Platform):
             final_path = ';'.join(new_path_parts)
             os.environ['PATH'] = final_path
             Logger.ok("PATH updated successfully")
-=======
->>>>>>> refs/remotes/origin/main
