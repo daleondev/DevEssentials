@@ -96,6 +96,9 @@ VI_MODE_SET_CURSOR=true
         if sys.platform == "win32":
             Logger.info("Installing Pwsh...")
             self.platform.install_package(KnownPackage.POWERSHELL)
+
+            if hasattr(self.platform, "refresh_windows_path"):
+                self.platform.refresh_windows_path()
         else:
             Logger.info("Installing Zsh...")
             self.platform.install_package(KnownPackage.ZSH)
@@ -304,6 +307,10 @@ VI_MODE_SET_CURSOR=true
                     "schemes": [self.GRUVBOX_THEME_WIN]
                 }
                 self.platform.update_windows_terminal_settings(updates)
+                
+                if hasattr(self.platform, "update_windows_terminal_profile"):
+                     self.platform.update_windows_terminal_profile("PowerShell", {"opacity": 95})
+
             else:
                 Logger.warn("Could not find Windows Terminal settings")
         

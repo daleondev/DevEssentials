@@ -20,7 +20,7 @@ def get_platform():
 
 def main():
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         description="""
 This script installs essential programs for the current user
 Installs the following by default:

@@ -4,6 +4,7 @@ import urllib.request
 import zipfile
 import sys
 import json
+import subprocess
 from lib.modules.base import Component
 from lib.core.packages import KnownPackage
 from lib.utils.logger import Logger
@@ -24,51 +25,102 @@ class Neovim(Component):
         Logger.info("Installing Neovim...")
         
         if sys.platform == "win32":
-            self._install_neovim_windows()
+            self._install_neovim_windows_bob()
         elif sys.platform == "linux":
-            self.platform.install_package(KnownPackage.NEOVIM)
-            Logger.ok("Successfully installed Neovim via package manager")
+            self._install_neovim_linux_bob()
         else:
             Logger.err(f"Neovim installation not supported on {sys.platform}")
             raise NotImplementedError(f"Unsupported platform: {sys.platform}")
 
-    def _install_neovim_windows(self) -> None:
-        url = "https://github.com/neovim/neovim/releases/download/v0.11.5/nvim-win64.zip"
-        archive_name = "nvim.zip"
+    def _install_neovim_windows_bob(self) -> None:
+        Logger.info("Installing Neovim via Bob (version manager)...")
         
-        download_path = os.path.join(os.getcwd(), "tmp")
-        download_file = os.path.join(download_path, archive_name)
-        os.makedirs(download_path, exist_ok=True)
+        # Command for Powershell installation as recommended by Bob readme
+        install_cmd = 'powershell -c "irm https://raw.githubusercontent.com/MordechaiHadad/bob/master/scripts/install.ps1 | iex"'
         
-        Logger.info(f"Downloading {url}...")
         try:
-            urllib.request.urlretrieve(url, download_file)
+            Logger.info("Running bob install script...")
+            subprocess.run(install_cmd, shell=True, check=True)
             
-            install_path = os.path.join(self.platform.get_home_dir(), "nvim")
-            if os.path.exists(install_path):
-                shutil.rmtree(install_path)
-            os.mkdir(install_path)
+            if hasattr(self.platform, "refresh_windows_path"):
+                self.platform.refresh_windows_path()
+
+            Logger.info("Installing latest stable Neovim via Bob...")
+            subprocess.run(["bob", "install", "latest"], check=True)
+            subprocess.run(["bob", "use", "latest"], check=True)
             
-            Logger.info("Extracting...")
-            with zipfile.ZipFile(download_file, 'r') as zip_ref:
-                zip_ref.extractall(install_path)
+            # Bob links nvim to nvim-bin inside .bob data folder?
+            # Actually on Windows, bob usually creates shims or adds the version path.
+            # 'bob use' should make 'nvim' available in the path managed by bob.
+            # We need to make sure that path is in our PATH.
             
-            # Zip contains 'nvim-win64' folder
-            bin_path = os.path.join(install_path, "nvim-win64", "bin")
+            # Usually: %USERPROFILE%\.local\share\bob\nvim-bin on Linux
+            # On Windows: %USERPROFILE%\AppData\Local\bob\nvim-bin
+            local_app_data = os.environ.get("LOCALAPPDATA")
+            bob_nvim_bin = os.path.join(local_app_data, "bob", "nvim-bin")
             
-            Logger.info(f"Adding {bin_path} to PATH...")
-            self.platform.add_to_path(bin_path)
-                
-            Logger.ok("Successfully installed Neovim binary")
-        finally:
-            if os.path.exists(download_file):
-                os.remove(download_file)
+            self.platform.add_to_path(bob_nvim_bin)
+            
+            # Update VS Code setting
+            nvim_exe = os.path.join(bob_nvim_bin, "nvim.exe")
+            self.platform.add_vscode_setting("vscode-neovim.neovimExecutablePaths.win32", nvim_exe)
+            
+            Logger.ok("Neovim installed and configured via Bob.")
+
+        except subprocess.CalledProcessError as e:
+            Logger.err(f"Failed during Bob execution: {e}")
+            raise
+        except Exception as e:
+            Logger.err(f"Failed to install Neovim via Bob: {e}")
+            raise
+
+    def _install_neovim_linux_bob(self) -> None:
+        Logger.info("Installing Neovim via Bob (version manager)...")
+        
+        install_cmd = "curl -fsSL https://raw.githubusercontent.com/MordechaiHadad/bob/master/scripts/install.sh | bash"
+        
+        try:
+            # Install bob
+            Logger.info("Running bob install script...")
+            subprocess.run(install_cmd, shell=True, check=True)
+            
+            # Bob is installed to ~/.local/bin by default
+            bob_path = os.path.expanduser("~/.local/bin/bob")
+            
+            if not os.path.exists(bob_path):
+                # Fallback check or maybe it's in PATH already?
+                if shutil.which("bob"):
+                    bob_path = "bob"
+                else:
+                    raise FileNotFoundError("Could not find 'bob' executable after installation.")
+
+            # Ensure ~/.local/bin is in PATH for future sessions
+            self.platform.add_to_path(os.path.dirname(bob_path) if os.path.isabs(bob_path) else os.path.expanduser("~/.local/bin"))
+
+            Logger.info("Installing latest stable Neovim via Bob...")
+            subprocess.run([bob_path, "install", "latest"], check=True)
+            subprocess.run([bob_path, "use", "latest"], check=True)
+            
+            # Add ~/.local/share/bob/nvim-bin to PATH (this is where bob links the active nvim)
+            bob_nvim_bin = os.path.expanduser("~/.local/share/bob/nvim-bin")
+            self.platform.add_to_path(bob_nvim_bin)
+            
+            # We also need to tell VS Code where it is
+            self.platform.add_vscode_setting("vscode-neovim.neovimExecutablePaths.linux", os.path.join(bob_nvim_bin, "nvim"))
+            
+            Logger.ok("Neovim installed and configured via Bob.")
+
+        except subprocess.CalledProcessError as e:
+            Logger.err(f"Failed during Bob execution: {e}")
+            raise
+        except Exception as e:
+            Logger.err(f"Failed to install Neovim via Bob: {e}")
+            raise
 
     def _install_vscode_extension(self) -> None:
         Logger.info("Installing VSCode Neovim extension...")
         self.platform.install_vscode_extension("asvetliakov.vscode-neovim")
-        if sys.platform == "win32":
-            self.platform.add_vscode_setting("vscode-neovim.neovimExecutablePaths.win32", os.path.join("C:\\", "Users", "Dev", "nvim", "nvim-win64", "bin", "nvim.exe"))
+        # Path configuration is now handled in the install methods because paths differ by method
         Logger.ok("Successfully installed VSCode Neovim extension")
 
     def _configure_neovim(self) -> None:

@@ -57,6 +57,9 @@ class Default(Component):
         else:
             self.platform.install_package(KnownPackage.VS_CODE)
 
+            if hasattr(self.platform, "refresh_windows_path"):
+                self.platform.refresh_windows_path()
+
     def _install_vscode_deb_linux(self) -> None:
         """Downloads and installs the VS Code .deb package directly."""
         if shutil.which("code"):
