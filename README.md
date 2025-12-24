@@ -53,11 +53,11 @@ The setup scripts pass any arguments directly to the underlying Python installer
 | Argument | Result |
 | :--- | :--- |
 | (none) | Installs VS Code and Git. |
-| --full | Installs everything listed above. |
 | --with-terminal | Adds the shell, themes, and font setup. |
 | --with-neovim | Adds Neovim and the VS Code integration. |
 | --with-build-tools | Adds compilers and build utilities. |
 | --with-utils | Adds extra utilities like Wget. |
+| --full | Installs everything listed above. |
 
 Example command to install everything:
 `./setup.sh --full`
