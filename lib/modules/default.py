@@ -29,9 +29,6 @@ class Default(Component):
     VSCODE_EXTENSIONS: List[str] = [
         "tomphilbin.gruvbox-themes",
         "s-nlf-fh.glassit",
-        "ms-python.python",
-        "ms-python.debugpy",
-        "ms-python.vscode-pylance",
     ]
 
     VSCODE_DEB_URL = "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64"
