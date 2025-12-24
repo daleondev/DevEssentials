@@ -62,6 +62,28 @@ The setup scripts pass any arguments directly to the underlying Python installer
 Example command to install everything:
 `./setup.sh --full`
 
+## Previews
+
+Here is what the environment looks like after installation.
+
+### Windows
+
+**Terminal (PowerShell + Oh-My-Posh)**
+![Windows Terminal](docs/Terminal_Windows.png)
+
+**VS Code**
+![VS Code on Windows](docs/VsCode_Windows.png)
+
+### Linux
+
+**Terminal (Zsh + Powerlevel10k)**
+<!-- ![Linux Terminal](docs/Terminal_Linux.png) -->
+*Screenshot coming soon*
+
+**VS Code**
+<!-- ![VS Code on Linux](docs/VsCode_Linux.png) -->
+*Screenshot coming soon*
+
 ## Project Structure
 
 * main.py: The main entry point for the installation logic.
