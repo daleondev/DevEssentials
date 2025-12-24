@@ -81,7 +81,7 @@ Here is what the environment looks like after installation.
 *Screenshot coming soon*
 
 **VS Code**
-<!-- ![VS Code on Linux](docs/VsCode_Linux.png) -->
+![VS Code on Linux](docs/VSCode_Linux.png)
 *Screenshot coming soon*
 
 ## Project Structure
