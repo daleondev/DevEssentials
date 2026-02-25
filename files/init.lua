@@ -14,7 +14,7 @@ vim.opt.smartindent = true
 vim.opt.signcolumn = "yes"
 vim.opt.swapfile = false
 vim.opt.cursorline = true
---vim.opt.winborder = "rounded"
+vim.opt.winborder = "rounded"
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
 
@@ -79,6 +79,17 @@ if vim.g.vscode then
     -- Toggle Comment
     vim.keymap.set('v', '<leader>c', code_action('editor.action.commentLine'))
 else
+    -- Plugins --------------------------------------------------------------
+    vim.pack.add({
+        { src = "https://github.com/ellisonleao/gruvbox.nvim" },
+        { src = "https://github.com/nvim-mini/mini.pick" },
+        { src = "https://github.com/sphamba/smear-cursor.nvim" },
+    })
+    require "mini.pick".setup()
+    require("smear_cursor").enabled = true
+    vim.cmd("colorscheme gruvbox")
+    vim.cmd(":hi statusline guibg=NONE")
+
     -- NAVIGATION -----------------------------------------------------------
 
     -- Switch buffers (Mapped to previous/next buffer)
@@ -109,8 +120,8 @@ else
     -- Code Actions (Using built-in LSP)
     vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { desc = "Code Action" })
 
-    -- File Search (Assuming Telescope is installed - replace with your picker)
-    vim.keymap.set('n', '<leader>f', '<cmd>Telescope find_files<CR>', { desc = "Find Files" })
+    -- File Search
+    vim.keymap.set('n', '<leader>f', ':Pick files<CR>')  
 
     -- Formatting (Using built-in LSP)
     vim.keymap.set('n', '<leader>lf', vim.lsp.buf.format, { desc = "Format Document" })

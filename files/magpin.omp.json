@@ -1,0 +1,73 @@
+{
+    "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
+    "version": 4,
+    "final_space": true,
+    "console_title_template": "{{ .Shell }} in {{ .Folder }}",
+    "blocks": [
+        {
+            "type": "prompt",
+            "alignment": "left",
+            "segments": [
+                {
+                    "type": "os",
+                    "style": "plain",
+                    "foreground": "#eeeeee",
+                    "background": "#303030",
+                    "template": " {{ .Icon }} <#5f5f5f>\ue0b1</>"
+                },
+                {
+                    "type": "path",
+                    "style": "plain",
+                    "foreground": "#0087af",
+                    "background": "#303030",
+                    "template": " {{ .Path }} ",
+                    "options": {
+                        "style": "full"
+                    }
+                },
+                {
+                    "type": "git",
+                    "style": "plain",
+                    "foreground": "#5fd700",
+                    "background": "#303030",
+                    "template": "<#5f5f5f>\ue0b1 </>{{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .StashCount }} *{{ .StashCount }}{{ end }}{{ if .Working.Changed }} !{{ .Working.String }}{{ end }}{{ if .Staging.Changed }} +{{ .Staging.String }}{{ end }}{{ if .Working.Untracked }} ?{{ .Working.Untracked }}{{ end }} ",
+                    "options": {
+                        "fetch_status": true,
+                        "branch_icon": " "
+                    }
+                },
+                {
+                    "type": "text",
+                    "style": "plain",
+                    "foreground": "#303030",
+                    "background": "transparent",
+                    "template": "\ue0b0"
+                }
+            ]
+        },
+        {
+            "type": "rprompt",
+            "overflow": "hide",
+            "segments": [
+                {
+                    "type": "executiontime",
+                    "style": "diamond",
+                    "foreground": "#a8a8a8",
+                    "background": "#303030",
+                    "leading_diamond": "\ue0b2",
+                    "template": " {{ .FormattedMs }} <#5f5f5f>\ue0b3</> ",
+                    "options": {
+                        "threshold": 0
+                    }
+                },
+                {
+                    "type": "time",
+                    "style": "plain",
+                    "foreground": "#5faf00",
+                    "background": "#303030",
+                    "template": " {{ .CurrentDate | date \"15:04:05\" }} "
+                }
+            ]
+        }
+    ]
+}
