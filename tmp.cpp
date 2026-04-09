@@ -98,3 +98,36 @@ public:
         };
     }
 };
+
+#include <open62541/types.h>
+#include <string>
+#include <vector>
+#include <map>
+
+// 1. Define what a reference is (The Edge in the graph)
+struct OpcReference {
+    UA_NodeId targetNodeId;
+    UA_NodeId referenceTypeId; // e.g., HasComponent, HasProperty
+    bool isForward;            // True if this node points TO the target
+};
+
+// 2. Define the Node (The Vertex in the graph)
+struct OpcNode {
+    UA_NodeId nodeId;
+    std::string browseName;
+    std::string displayName;
+    UA_NodeClass nodeClass;
+    
+    // Instead of holding nested nodes, we just hold the IDs!
+    std::vector<OpcReference> references; 
+};
+
+// 3. Re-use the Comparator from our previous recursive script
+struct NodeIdCompare {
+    bool operator()(const UA_NodeId& lhs, const UA_NodeId& rhs) const noexcept {
+        return UA_NodeId_order(&lhs, &rhs) == UA_ORDER_LESS;
+    }
+};
+
+// 4. The actual Data Structure
+using OpcAddressSpace = std::map<UA_NodeId, OpcNode, NodeIdCompare>;
