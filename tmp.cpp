@@ -277,6 +277,17 @@ void build_address_space(UA_Client* client, const UA_NodeId& currentNode, OpcAdd
 
 
 
+std::string nodeid_to_string(const SafeNodeId& id) {
+    UA_String out = UA_STRING_NULL;
+    UA_NodeId_print(&id.get(), &out);
+    
+    std::string result;
+    if (out.data) {
+        result = std::string(reinterpret_cast<const char*>(out.data), out.length);
+        UA_String_clear(&out); // Free the memory allocated by UA_NodeId_print
+    }
+    return result;
+}
 
 void print_address_space_tree(const OpcAddressSpace& addressSpace, 
                               const SafeNodeId& currentNodeId, 
