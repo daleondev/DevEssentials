@@ -131,3 +131,146 @@ struct NodeIdCompare {
 
 // 4. The actual Data Structure
 using OpcAddressSpace = std::map<UA_NodeId, OpcNode, NodeIdCompare>;
+
+
+
+
+
+
+
+
+
+#include <open62541/client_config_default.h>
+#include <open62541/client_highlevel.h>
+
+#include <iostream>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+
+// ---------------------------------------------------------
+// 1. Memory-Safe NodeId Wrapper (For the Map Key)
+// ---------------------------------------------------------
+class SafeNodeId {
+    UA_NodeId m_id;
+public:
+    // Constructor: Deep copy from a raw C struct
+    explicit SafeNodeId(const UA_NodeId& src) {
+        UA_NodeId_init(&m_id);
+        UA_NodeId_copy(&src, &m_id);
+    }
+    
+    // Copy Constructor
+    SafeNodeId(const SafeNodeId& other) {
+        UA_NodeId_init(&m_id);
+        UA_NodeId_copy(&other.m_id, &m_id);
+    }
+
+    ~SafeNodeId() { UA_NodeId_clear(&m_id); }
+
+    const UA_NodeId& get() const { return m_id; }
+
+    // Required by std::map to sort the keys!
+    bool operator<(const SafeNodeId& rhs) const {
+        return UA_NodeId_order(&m_id, &rhs.get()) == UA_ORDER_LESS;
+    }
+};
+
+// ---------------------------------------------------------
+// 2. Safe C++ Graph Data Structures (The Map Values)
+// ---------------------------------------------------------
+struct OpcReference {
+    SafeNodeId targetId;
+    std::string browseName; 
+    UA_NodeClass targetNodeClass;
+};
+
+struct OpcNode {
+    SafeNodeId nodeId; // Keep a copy of own ID for convenience
+    std::vector<OpcReference> references;
+};
+
+using OpcAddressSpace = std::map<SafeNodeId, OpcNode>;
+
+// ---------------------------------------------------------
+// 3. RAII Helpers
+// ---------------------------------------------------------
+struct BrowseResponseGuard {
+    UA_BrowseResponse response;
+    explicit BrowseResponseGuard(UA_BrowseResponse resp) : response(resp) {}
+    ~BrowseResponseGuard() { UA_BrowseResponse_clear(&response); }
+};
+
+std::string to_cpp_string(const UA_String& ua_str) {
+    if (!ua_str.data || ua_str.length == 0) return "";
+    return std::string(reinterpret_cast<const char*>(ua_str.data), ua_str.length);
+}
+
+// ---------------------------------------------------------
+// 4. The Recursive Graph Builder
+// ---------------------------------------------------------
+void build_address_space(UA_Client* client, const UA_NodeId& currentNode, OpcAddressSpace& addressSpace) 
+{
+    SafeNodeId safeCurrentId(currentNode);
+
+    // CYCLE PREVENTION: 
+    // If the node is already a key in our map, we have already browsed it!
+    // Stop recursion immediately to prevent infinite loops.
+    if (addressSpace.find(safeCurrentId) != addressSpace.end()) {
+        return;
+    }
+
+    // Insert the node into the map FIRST. 
+    // This marks it as "visited" before we even start checking its children.
+    OpcNode newNode;
+    newNode.nodeId = safeCurrentId;
+    addressSpace[safeCurrentId] = newNode;
+
+    // Build the Browse Request
+    UA_BrowseRequest bReq;
+    UA_BrowseRequest_init(&bReq);
+    bReq.requestedMaxReferencesPerNode = 0;
+    bReq.nodesToBrowseSize = 1;
+
+    UA_BrowseDescription bDesc;
+    UA_BrowseDescription_init(&bDesc);
+    bDesc.nodeId = currentNode;
+    bDesc.resultMask = UA_BROWSERESULTMASK_ALL;
+    bDesc.referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HIERARCHICALREFERENCES);
+    bDesc.browseDirection = UA_BROWSEDIRECTION_FORWARD;
+    bDesc.includeSubtypes = true;
+
+    bReq.nodesToBrowse = &bDesc;
+
+    // Execute Browse safely
+    BrowseResponseGuard browseGuard(UA_Client_Service_browse(client, bReq));
+    const UA_BrowseResponse& bResp = browseGuard.response;
+
+    if (bResp.responseHeader.serviceResult != UA_STATUSCODE_GOOD || bResp.resultsSize == 0) {
+        return;
+    }
+
+    const UA_BrowseResult& result = bResp.results[0];
+    if (result.statusCode != UA_STATUSCODE_GOOD) {
+        return;
+    }
+
+    // Iterate through children
+    for (size_t i = 0; i < result.referencesSize; ++i) {
+        const UA_ReferenceDescription* ref = &result.references[i];
+        
+        // 1. Extract the raw C data into our safe C++ reference struct
+        OpcReference safeRef {
+            SafeNodeId(ref->nodeId.nodeId), // Deep copy the child's ID
+            to_cpp_string(ref->browseName.name), // Deep copy the string
+            ref->nodeClass
+        };
+
+        // 2. Add the edge to our current node in the map
+        addressSpace[safeCurrentId].references.push_back(safeRef);
+
+        // 3. Recurse deeper into the graph using the child's ID!
+        build_address_space(client, ref->nodeId.nodeId, addressSpace);
+    }
+}
