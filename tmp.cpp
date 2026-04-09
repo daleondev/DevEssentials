@@ -274,3 +274,47 @@ void build_address_space(UA_Client* client, const UA_NodeId& currentNode, OpcAdd
         build_address_space(client, ref->nodeId.nodeId, addressSpace);
     }
 }
+
+
+
+
+void print_address_space_tree(const OpcAddressSpace& addressSpace, 
+                              const SafeNodeId& currentNodeId, 
+                              const std::string& currentName, 
+                              int depth, 
+                              std::set<SafeNodeId>& printed_nodes) 
+{
+    std::string indent(depth * 3, ' ');
+
+    // 1. Check if the node actually exists in our map
+    auto it = addressSpace.find(currentNodeId);
+    if (it == addressSpace.end()) {
+        std::cout << indent << "- " << currentName << " [Node details not browsed]\n";
+        return;
+    }
+
+    // 2. CYCLE PREVENTION: Have we already printed this node's children?
+    if (printed_nodes.find(currentNodeId) != printed_nodes.end()) {
+        std::cout << indent << "- " << currentName 
+                  << " [-> Link to already printed node: " 
+                  << nodeid_to_string(currentNodeId) << "]\n";
+        return;
+    }
+
+    // Mark this node as printed so we don't recurse into it again
+    printed_nodes.insert(currentNodeId);
+
+    // 3. Print the current node
+    std::cout << indent << "- " << currentName 
+              << " (" << nodeid_to_string(currentNodeId) << ")\n";
+
+    // 4. Iterate through its references and recurse!
+    const OpcNode& nodeData = it->second;
+    for (const OpcReference& ref : nodeData.references) {
+        print_address_space_tree(addressSpace, 
+                                 ref.targetId, 
+                                 ref.browseName, 
+                                 depth + 1, 
+                                 printed_nodes);
+    }
+}
