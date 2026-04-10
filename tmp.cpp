@@ -329,3 +329,109 @@ void print_address_space_tree(const OpcAddressSpace& addressSpace,
                                  printed_nodes);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+#include <open62541/client_highlevel.h>
+#include <concepts>
+#include <optional>
+#include <string>
+
+// 1. C++20 Concept to restrict to types we know how to handle
+template <typename T>
+concept OpcScalar = std::is_same_v<T, bool> ||
+                    std::is_same_v<T, int32_t> ||
+                    std::is_same_v<T, uint32_t> ||
+                    std::is_same_v<T, float> ||
+                    std::is_same_v<T, double> ||
+                    std::is_same_v<T, std::string>;
+
+// 2. Type matching helper
+template <OpcScalar T>
+constexpr const UA_DataType* get_ua_type() {
+    if constexpr (std::is_same_v<T, bool>)     return &UA_TYPES;
+    if constexpr (std::is_same_v<T, int32_t>)  return &UA_TYPES;
+    if constexpr (std::is_same_v<T, uint32_t>) return &UA_TYPES;
+    if constexpr (std::is_same_v<T, float>)    return &UA_TYPES;
+    if constexpr (std::is_same_v<T, double>)   return &UA_TYPES;
+    if constexpr (std::is_same_v<T, std::string>) return &UA_TYPES;
+}
+
+// ---------------------------------------------------------
+// WRITE NODE
+// ---------------------------------------------------------
+template <OpcScalar T>
+UA_StatusCode write_node(UA_Client* client, const UA_NodeId& nodeId, const T& value) {
+    UA_Variant variant;
+    UA_Variant_init(&variant);
+
+    if constexpr (std::is_same_v<T, std::string>) {
+        // Strings require specific conversion
+        UA_String ua_str = UA_String_fromChars(value.c_str());
+        // setScalar takes ownership of the memory, no need to copy again
+        UA_Variant_setScalar(&variant, &ua_str, &UA_TYPES);
+    } else {
+        // Numeric types can just be deeply copied in
+        UA_Variant_setScalarCopy(&variant, &value, get_ua_type<T>());
+    }
+
+    // Execute the write
+    UA_StatusCode status = UA_Client_writeValueAttribute(client, nodeId, &variant);
+
+    // Free the variant's internal memory immediately
+    UA_Variant_clear(&variant);
+    
+    return status;
+}
+
+// ---------------------------------------------------------
+// READ NODE
+// ---------------------------------------------------------
+template <OpcScalar T>
+std::optional<T> read_node(UA_Client* client, const UA_NodeId& nodeId) {
+    UA_Variant variant;
+    UA_Variant_init(&variant);
+
+    UA_StatusCode status = UA_Client_readValueAttribute(client, nodeId, &variant);
+
+    if (status != UA_STATUSCODE_GOOD) {
+        UA_Variant_clear(&variant);
+        return std::nullopt; // Safely return nothing on network/node error
+    }
+
+    // Check if the server actually returned the type we expected
+    if (variant.type != get_ua_type<T>() || !UA_Variant_isScalar(&variant)) {
+        UA_Variant_clear(&variant);
+        return std::nullopt; // Type mismatch
+    }
+
+    std::optional<T> result;
+
+    if constexpr (std::is_same_v<T, std::string>) {
+        // Extract the C-string into a safe C++ string
+        UA_String* ua_str = static_cast<UA_String*>(variant.data);
+        if (ua_str->data && ua_str->length > 0) {
+            result = std::string(reinterpret_cast<const char*>(ua_str->data), ua_str->length);
+        } else {
+            result = std::string("");
+        }
+    } else {
+        // Extract numeric types directly
+        result = *static_cast<T*>(variant.data);
+    }
+
+    // Free the dynamic memory the server allocated for the variant
+    UA_Variant_clear(&variant);
+
+    return result;
+}
