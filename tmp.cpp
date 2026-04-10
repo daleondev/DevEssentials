@@ -435,3 +435,108 @@ std::optional<T> read_node(UA_Client* client, const UA_NodeId& nodeId) {
 
     return result;
 }
+
+#include <open62541/client_highlevel.h>
+#include <open62541/client_subscriptions.h>
+#include <functional>
+#include <iostream>
+
+// 1. The Wrapper that lives on the heap
+template <OpcScalar T>
+struct MonitoredItemContext {
+    std::function<void(const T&)> callback;
+};
+
+// 2. The Static Data Change Callback (Matches open62541 C-signature)
+template <OpcScalar T>
+static void data_change_callback(UA_Client *client, UA_UInt32 subId, void *subContext,
+                                 UA_UInt32 monId, void *monContext, UA_DataValue *value) 
+{
+    // If there is no value or data is invalid, ignore it
+    if (!value || !value->hasValue || !monContext) return;
+
+    // Cast the void* back to our C++ struct
+    auto* ctx = static_cast<MonitoredItemContext<T>*>(monContext);
+
+    // Verify the server sent the type we actually expect
+    if (value->value.type != get_ua_type<T>() || !UA_Variant_isScalar(&value->value)) {
+        return; 
+    }
+
+    // Extract the data and invoke the user's C++ lambda!
+    if constexpr (std::is_same_v<T, std::string>) {
+        UA_String* ua_str = static_cast<UA_String*>(value->value.data);
+        if (ua_str->data && ua_str->length > 0) {
+            ctx->callback(std::string(reinterpret_cast<const char*>(ua_str->data), ua_str->length));
+        } else {
+            ctx->callback(std::string(""));
+        }
+    } else {
+        ctx->callback(*static_cast<T*>(value->value.data));
+    }
+}
+
+// 3. The Static Delete Callback (Crucial for preventing memory leaks)
+template <OpcScalar T>
+static void delete_monitored_item_callback(UA_Client *client, UA_UInt32 subId, void *subContext,
+                                           UA_UInt32 monId, void *monContext) 
+{
+    if (monContext) {
+        auto* ctx = static_cast<MonitoredItemContext<T>*>(monContext);
+        delete ctx; // Safely free the heap memory containing the std::function
+    }
+}
+
+
+template <OpcScalar T>
+UA_UInt32 subscribe_to_node(UA_Client* client, 
+                            UA_UInt32 subscriptionId, 
+                            const UA_NodeId& nodeId, 
+                            std::function<void(const T&)> callback) 
+{
+    // 1. Allocate the context on the heap. 
+    // This MUST be on the heap so it survives after this function returns.
+    auto* ctx = new MonitoredItemContext<T>{ std::move(callback) };
+
+    // 2. Setup the request
+    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(nodeId);
+    
+    // Optional: tweak sampling interval (e.g., 500ms)
+    monRequest.requestedParameters.samplingInterval = 500.0; 
+
+    // 3. Register with open62541
+    UA_MonitoredItemCreateResult monResponse = UA_Client_MonitoredItems_createDataChange(
+        client, 
+        subscriptionId, 
+        UA_TIMESTAMPSTORETURN_BOTH, 
+        monRequest, 
+        ctx,                            // Pass our heap pointer as the void* context
+        data_change_callback<T>,        // Function pointer to process data
+        delete_monitored_item_callback<T> // Function pointer to clean up memory
+    );
+
+    // 4. Handle failure
+    if (monResponse.statusCode != UA_STATUSCODE_GOOD) {
+        delete ctx; // Clean up manually if registration failed!
+        return 0;
+    }
+
+    return monResponse.monitoredItemId;
+}
+
+void setup_subscriptions(UA_Client* client, UA_UInt32 masterSubId) {
+    UA_NodeId pumpSpeedId = UA_NODEID_NUMERIC(1, 1002);
+    UA_NodeId pumpNameId = UA_NODEID_STRING(1, "PumpName");
+
+    // Subscribe to an integer
+    subscribe_to_node<int32_t>(client, masterSubId, pumpSpeedId, [](const int32_t& newSpeed) {
+        std::cout << "Pump speed changed to: " << newSpeed << " RPM\n";
+    });
+
+    // Subscribe to a string and capture local variables!
+    int update_count = 0;
+    subscribe_to_node<std::string>(client, masterSubId, pumpNameId,(const std::string& newName) {
+        update_count++;
+        std::cout << "Name changed to " << newName << " (Total updates: " << update_count << ")\n";
+    });
+}
