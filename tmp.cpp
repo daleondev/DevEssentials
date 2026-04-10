@@ -540,3 +540,75 @@ void setup_subscriptions(UA_Client* client, UA_UInt32 masterSubId) {
         std::cout << "Name changed to " << newName << " (Total updates: " << update_count << ")\n";
     });
 }
+
+
+#include <open62541/client_subscriptions.h>
+#include <iostream>
+#include <optional>
+
+// Returns the Subscription ID if successful, or std::nullopt if it fails
+std::optional<UA_UInt32> create_master_subscription(UA_Client* client) {
+    
+    // 1. Setup the standard request
+    UA_CreateSubscriptionRequest request = UA_CreateSubscriptionRequest_default();
+
+    // 2. Configure the "Heartbeat" (Crucial for performance!)
+    // This tells the server: "Check my monitored items and send me an update every 500ms"
+    request.requestedPublishingInterval = 500.0; 
+    
+    // How many times the server can skip sending a message if data hasn't changed
+    request.requestedMaxKeepAliveCount = 10; 
+    
+    // How many intervals the server waits before considering your client disconnected
+    request.requestedLifetimeCount = 30; 
+
+    // 3. Execute the request
+    UA_CreateSubscriptionResponse response = UA_Client_Subscriptions_create(
+        client, 
+        request, 
+        nullptr, // We don't need a global context for the subscription itself
+        nullptr, // No global status change callback needed for this basic setup
+        nullptr  // No global delete callback needed
+    );
+
+    // 4. Check for success
+    if (response.responseHeader.serviceResult != UA_STATUSCODE_GOOD) {
+        std::cerr << "Failed to create master subscription!\n";
+        return std::nullopt;
+    }
+
+    std::cout << "Master subscription created with ID: " << response.subscriptionId << "\n";
+    return response.subscriptionId;
+}
+
+void opc_thread_entry(UA_Client* client) {
+    // 1. First, connect the client to the server
+    UA_StatusCode connectStatus = UA_Client_connect(client, "opc.tcp://192.168.1.100:4840");
+    if (connectStatus != UA_STATUSCODE_GOOD) {
+        return; // Handle connection failure
+    }
+
+    // 2. Create the master subscription truck
+    auto maybeSubId = create_master_subscription(client);
+    if (!maybeSubId.has_value()) {
+        return; // Handle subscription failure
+    }
+    UA_UInt32 masterSubId = maybeSubId.value();
+
+    // 3. Load your packages (Monitored Items) onto the truck!
+    // (Using the subscribe_to_node function we wrote earlier)
+    UA_NodeId pumpSpeedId = UA_NODEID_NUMERIC(1, 1002);
+    
+    subscribe_to_node<int32_t>(client, masterSubId, pumpSpeedId, [](const int32_t& speed) {
+        std::cout << "Live Speed: " << speed << "\n";
+    });
+
+    // 4. Enter the infinite RTOS loop to process incoming network traffic
+    while (true) {
+        // This function blocks briefly, receives the network packets, 
+        // and synchronously fires your lambdas if data changed!
+        UA_Client_run_iterate(client, 100); 
+        
+        // ... (yield thread, sleep, etc.) ...
+    }
+}
