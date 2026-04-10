@@ -612,3 +612,35 @@ void opc_thread_entry(UA_Client* client) {
         // ... (yield thread, sleep, etc.) ...
     }
 }
+
+
+template <typename T, typename Variant>
+consteval std::size_t get_variant_index() {
+    // 1. Pretend to pass a Variant pointer to an explicit template lambda
+    return []<typename... Ts>(const std::variant<Ts...>*) {
+        
+        // 2. Build a compile-time array of booleans checking if each type matches T
+        constexpr std::array<bool, sizeof...(Ts)> matches = { std::is_same_v<T, Ts>... };
+        
+        std::size_t match_count = 0;
+        std::size_t found_index = 0;
+        
+        // 3. Loop through the array to find our match
+        for (std::size_t i = 0; i < matches.size(); ++i) {
+            if (matches[i]) {
+                found_index = i;
+                match_count++;
+            }
+        }
+        
+        // 4. Compile-time assertions
+        // consteval functions are not allowed to throw exceptions. 
+        // If these throw statements are hit, compilation fails immediately 
+        // and prints your custom error message in the compiler output!
+        if (match_count == 0) throw "Error: Type not found in variant!";
+        if (match_count > 1) throw "Error: Type is not unique in variant!";
+        
+        return found_index;
+        
+    }(static_cast<Variant*>(nullptr));
+}
