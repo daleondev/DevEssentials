@@ -644,3 +644,127 @@ consteval std::size_t get_variant_index() {
         
     }(static_cast<Variant*>(nullptr));
 }
+
+@startuml class_diagram
+skinparam classAttributeIconSize 0
+
+hide <<utility>> circles
+
+namespace OPC_UA {
+    class Client {
+        + <<alias>> BrowseResult
+
+        + connect() : void
+        + disconnect() : void
+    }
+
+    class Server {
+        + start() : void
+        + stop() : void
+    }
+
+    class Read <<utility>> {
+        + {static} readNode() : void
+    }
+
+    class Write <<utility>> {
+        + {static} writeNode() : void
+    }
+
+    class Subscription <<utility>> {
+        + {static} createSubscription() : void
+        + {static} subscribeNode() : void
+    }
+}
+
+interface IExecutor {
+    + {abstract} initialize() : void
+    + {abstract} execute() : void
+}
+
+struct StandbyOperatingScheme {}
+
+namespace Server {
+    namespace Bioreactor {
+    }
+    namespace ProcessingStation {
+    }
+}
+
+namespace EquipmentPhases {
+    abstract class "BaseEquipmentPhase<Derived, EM, OutputData, OperatingScheme...>" as BaseEquipmentPhase implements .IExecutor {
+        - m_topic : string_view
+        + {abstract} foo() : void
+    }
+
+    namespace Bioreactor {
+    class DummyPhase extends EquipmentPhases.BaseEquipmentPhase {
+            + initialize() : void
+            + execute() : void
+        } 
+    }
+}
+
+namespace EquipmentModules {
+
+    abstract class "BaseEquipmentModule<Derived = ProcessingStation::DummyModule\nEM = ProcessingStation::DummyParameters\nOutputData = ProcessingStation::DummyOutputData\nOperatingScheme... = {ProcessingStation::DummyOperatingScheme}>" as BaseEquipmentModule implements .IExecutor {
+        - m_topic : string_view
+        + {abstract} foo() : void
+    }
+
+    namespace Bioreactor {
+        class "RemoteModule<EM = ProcessingStation::DummyModule>" as RemoteModule implements .IExecutor {
+            + <<alias>> EMParams : EM::BaseEquipmentModule::EM
+            + <<alias>> EMOutputData : EM::BaseEquipmentModule::OutputData
+            + <<alias>> EMOperatingScheme : EM::BaseEquipmentModule::OperatingScheme
+            + <<alias>> OperatingSchemes : {StandbyOperatingScheme, EMOperatingScheme}
+
+            + initialize() : void
+            + execute() : void
+            - waitForClient(): void
+            - broseRemoteEM(): void
+            - subscribeRemoteOutputs() : void
+            - subscribeLocalOperatingSchemes() : void
+        }
+    }
+
+    namespace ProcessingStation {
+        struct DummyOperatingScheme {
+            + param1 : int
+            + param2 : string
+        }
+
+        struct DummyParameters {
+            + param1 : int
+            + param2 : string
+        }
+
+        struct DummyOutputData {
+            + param1 : int
+            + param2 : string
+        }
+
+        class DummyModule extends EquipmentModules.BaseEquipmentModule {
+            + initialize() : void
+            + execute() : void
+        } 
+    }
+
+    BaseEquipmentModule ..> ProcessingStation.DummyParameters : <<use>>
+    BaseEquipmentModule ..> ProcessingStation.DummyOutputData : <<use>>
+    BaseEquipmentModule ..> ProcessingStation.DummyOperatingScheme : <<use>>
+    BaseEquipmentModule ..> ProcessingStation.DummyModule : <<use>>
+
+    Bioreactor.RemoteModule ...> ProcessingStation.DummyModule : <<use>>
+    Bioreactor.RemoteModule ..> .StandbyOperatingScheme : <<use>>
+}
+
+namespace ControlModules {
+
+}
+
+EquipmentPhases.Bioreactor.DummyPhase <.[#DarkBlue,thickness=2].> EquipmentModules.Bioreactor.RemoteModule : <color:DarkBlue><<msg_queue>></color>
+EquipmentModules.Bioreactor.RemoteModule <.[#DarkBlue,thickness=2].> EquipmentModules.ProcessingStation.DummyModule : <color:DarkBlue><<opc_ua>></color>
+
+@enduml
+
