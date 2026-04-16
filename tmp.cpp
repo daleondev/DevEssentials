@@ -768,3 +768,106 @@ EquipmentModules.Bioreactor.RemoteModule <.[#DarkBlue,thickness=2].> EquipmentMo
 
 @enduml
 
+#include <open62541/client_config_default.h>
+#include <open62541/client_highlevel_async.h>
+
+#include <chrono>
+#include <iostream>
+#include <memory>
+#include <string>
+
+class OpcUaClient {
+public:
+    // Delete default constructor, copy, and move semantics to prevent dangling pointers
+    OpcUaClient() = delete;
+    OpcUaClient(const OpcUaClient&) = delete;
+    OpcUaClient& operator=(const OpcUaClient&) = delete;
+
+    /**
+     * @brief Constructs the OPC UA Client.
+     * @param endpoint The OPC UA server URL (e.g., "opc.tcp://192.168.1.100:4840")
+     */
+    explicit OpcUaClient(std::string endpoint) 
+        : endpoint_(std::move(endpoint)) 
+    {
+        // 1. Initialize the raw C pointer inside our smart pointer
+        client_.reset(UA_Client_new());
+        
+        // 2. Set default config and customize the timeout
+        UA_ClientConfig* config = UA_Client_getConfig(client_.get());
+        UA_ClientConfig_setDefault(config);
+        config->timeout = 3000; // 3 seconds is a safe sweet spot for embedded servers
+    }
+
+    /**
+     * @brief The single update function to be called in your main thread loop.
+     * It handles async reconnections, backoff timers, and network traffic polling.
+     * This function will never block the thread.
+     */
+    void execute() {
+        UA_ClientState state = UA_Client_getState(client_.get());
+
+        // 1. Connection State Machine
+        if (state == UA_CLIENTSTATE_DISCONNECTED) {
+            auto now = std::chrono::steady_clock::now();
+            
+            // Initiate a connection ONLY if we aren't currently trying, 
+            // and our backoff timer has expired.
+            if (!is_connecting_ && now >= next_retry_time_) {
+                std::cout << "[Client] Initiating connection to " << endpoint_ << "...\n";
+                is_connecting_ = true;
+                
+                // Pass 'this' as the userdata so the C-callback can update this specific object
+                UA_Client_connectAsync(client_.get(), endpoint_.c_str(), &OpcUaClient::onConnectCallback, this);
+            }
+        } 
+        else if (state == UA_CLIENTSTATE_SESSION) {
+            // The client is connected and healthy.
+            // If you have async Read/Write/Call requests, you can enqueue them here.
+        }
+
+        // 2. Process all pending background network operations (non-blocking)
+        UA_Client_run_iterate(client_.get(), 0);
+    }
+
+private:
+    // Custom deleter for std::unique_ptr to safely clean up the open62541 client
+    struct UA_ClientDeleter {
+        void operator()(UA_Client* c) const {
+            if (c) {
+                // Disconnect cleanly if a session is active, then delete
+                UA_Client_disconnect(c); 
+                UA_Client_delete(c);
+            }
+        }
+    };
+
+    std::unique_ptr<UA_Client, UA_ClientDeleter> client_{nullptr};
+    std::string endpoint_;
+    
+    // State machine tracking
+    bool is_connecting_{false};
+    std::chrono::steady_clock::time_point next_retry_time_{};
+    std::chrono::milliseconds retry_backoff_{5000}; // 5-second delay on failure
+
+    /**
+     * @brief The static C-style callback triggered by open62541 when connectAsync finishes.
+     */
+    static void onConnectCallback(UA_Client* /*client*/, void* userdata, UA_UInt32 /*requestId*/, UA_StatusCode status) {
+        // Cast the userdata back to our C++ class instance
+        auto* self = static_cast<OpcUaClient*>(userdata);
+        
+        // Unlock the connection state
+        self->is_connecting_ = false;
+
+        if (status == UA_STATUSCODE_GOOD) {
+            std::cout << "[Client] Connected successfully to " << self->endpoint_ << "!\n";
+        } else {
+            std::cout << "[Client] Connection failed: " << UA_StatusCode_name(status) 
+                      << ". Retrying in " << self->retry_backoff_.count() << "ms.\n";
+            
+            // Set the backoff timer for the next attempt
+            self->next_retry_time_ = std::chrono::steady_clock::now() + self->retry_backoff_;
+        }
+    }
+};
