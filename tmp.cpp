@@ -871,3 +871,127 @@ private:
         }
     }
 };
+
+
+
+
+
+
+
+
+
+
+
+#include <open62541/client_config_default.h>
+#include <open62541/client_highlevel_async.h>
+#include <open62541/client.h>
+
+#include <chrono>
+#include <iostream>
+#include <memory>
+#include <string>
+
+class OpcUaClient {
+public:
+    OpcUaClient() = delete;
+    OpcUaClient(const OpcUaClient&) = delete;
+    OpcUaClient& operator=(const OpcUaClient&) = delete;
+
+    explicit OpcUaClient(std::string endpoint) 
+        : endpoint_(std::move(endpoint)) 
+    {
+        client_.reset(UA_Client_new());
+        UA_ClientConfig* config = UA_Client_getConfig(client_.get());
+        UA_ClientConfig_setDefault(config);
+        
+        config->timeout = 3000; 
+        
+        // 1. Pass 'this' into the context so the C-callback can interact with our C++ class
+        config->clientContext = this; 
+        
+        // 2. Register the modern open62541 state callback
+        config->stateCallback = &OpcUaClient::onStateChange;
+    }
+
+    void execute() {
+        UA_SecureChannelState channelState;
+        UA_SessionState sessionState;
+        UA_StatusCode connectStatus;
+
+        // 3. The modern 4-parameter getState function
+        UA_Client_getState(client_.get(), &channelState, &sessionState, &connectStatus);
+
+        // 4. Connection State Machine logic
+        if (channelState == UA_SECURECHANNELSTATE_CLOSED && !is_connecting_) {
+            auto now = std::chrono::steady_clock::now();
+            
+            if (now >= next_retry_time_) {
+                std::cout << "[Client] Initiating async connection to " << endpoint_ << "...\n";
+                is_connecting_ = true;
+                
+                // 5. The modern connectAsync (no callback parameters required)
+                UA_StatusCode retval = UA_Client_connectAsync(client_.get(), endpoint_.c_str());
+                
+                if (retval != UA_STATUSCODE_GOOD) {
+                    // Rejected immediately (e.g., DNS resolution failed)
+                    is_connecting_ = false;
+                    next_retry_time_ = now + retry_backoff_;
+                    std::cout << "[Client] connectAsync rejected: " << UA_StatusCode_name(retval) << "\n";
+                }
+            }
+        } 
+        else if (sessionState == UA_SESSIONSTATE_ACTIVATED) {
+            // The client is fully connected and active!
+            // Enqueue async Read/Write/Call requests here.
+        }
+
+        // 6. Keep the background thread moving (Non-blocking)
+        UA_Client_run_iterate(client_.get(), 0);
+    }
+
+private:
+    // Custom deleter for safe cleanup
+    struct UA_ClientDeleter {
+        void operator()(UA_Client* c) const {
+            if (c) {
+                // Clear the context so callbacks during shutdown are safely ignored
+                UA_ClientConfig* config = UA_Client_getConfig(c);
+                if (config) config->clientContext = nullptr;
+                
+                UA_Client_disconnect(c);
+                UA_Client_delete(c);
+            }
+        }
+    };
+
+    std::unique_ptr<UA_Client, UA_ClientDeleter> client_{nullptr};
+    std::string endpoint_;
+    
+    bool is_connecting_{false};
+    std::chrono::steady_clock::time_point next_retry_time_{};
+    std::chrono::milliseconds retry_backoff_{5000}; 
+
+    /**
+     * @brief The modern C-style callback triggered by open62541 state changes.
+     */
+    static void onStateChange(UA_Client *client, UA_SecureChannelState channelState, 
+                              UA_SessionState sessionState, UA_StatusCode connectStatus) {
+        
+        // Retrieve our C++ object back from the client configuration context
+        auto* self = static_cast<OpcUaClient*>(UA_Client_getContext(client));
+        if (!self) return; // Safely ignore if tearing down
+
+        if (sessionState == UA_SESSIONSTATE_ACTIVATED) {
+            self->is_connecting_ = false;
+            std::cout << "[Client] Connection ESTABLISHED to " << self->endpoint_ << "!\n";
+        } 
+        else if (channelState == UA_SECURECHANNELSTATE_CLOSED) {
+            // Whether the async connect failed, or an active connection just dropped,
+            // we unlock the state and enforce a backoff timer before retrying.
+            self->is_connecting_ = false;
+            std::cout << "[Client] Connection closed or failed. Status: " 
+                      << UA_StatusCode_name(connectStatus) << "\n";
+            self->next_retry_time_ = std::chrono::steady_clock::now() + self->retry_backoff_;
+        }
+    }
+};
