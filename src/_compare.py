@@ -48,6 +48,13 @@ def opcua_peak(idle: IdleBundle, name: str) -> float | None:
     return float(row["Peak"].iloc[0])
 
 
+def opcua_current(idle: IdleBundle, name: str) -> float | None:
+    row = idle.opcua[idle.opcua["Name"] == name]
+    if row.empty:
+        return None
+    return float(row["Current"].iloc[0])
+
+
 def workload_thread_for(label: str) -> str:
     return WORKLOAD_THREAD.get(label, DEFAULT_WORKLOAD_THREAD)
 
@@ -69,6 +76,7 @@ def build_summary(sources: list[SourceData], workload_label: str) -> pd.DataFram
             f"{workload_label}_heap_max_B": heap.get("max"),
             "workload_thread": wl_thread,
             "idle_workload_thread_peak_B": opcua_peak(s.idle, wl_thread),
+            "idle_workload_thread_current_B": opcua_current(s.idle, wl_thread),
             f"{workload_label}_stack_max_B": stack.get("max"),
         })
     return pd.DataFrame(rows)
@@ -121,17 +129,21 @@ def plot_heap(sources, workload_label, title):
 
 
 def plot_stack(sources, workload_label, title):
-    """Per source: idle peak of the matching OPC/UA thread vs workload max."""
+    """Per source: idle peak + idle current of the matching OPC/UA thread vs workload max."""
     labels = [f"{s.label}\n({workload_thread_for(s.label)})" for s in sources]
     idle_peak = [opcua_peak(s.idle, workload_thread_for(s.label)) or 0 for s in sources]
+    idle_curr = [opcua_current(s.idle, workload_thread_for(s.label)) or 0 for s in sources]
     work_max = [s.workload.get("Stack usage", {}).get("max") or 0 for s in sources]
 
     x = np.arange(len(sources))
-    w = 0.38
-    fig, ax = plt.subplots(figsize=(max(7, 1.8 * len(sources) + 3), 4.8))
-    bars_a = ax.bar(x - w / 2, idle_peak, w, label="idle baseline")
-    bars_b = ax.bar(x + w / 2, work_max, w, label="operation max")
-    for bars, values in ((bars_a, idle_peak), (bars_b, work_max)):
+    w = 0.27
+    fig, ax = plt.subplots(figsize=(max(7, 2.0 * len(sources) + 3), 4.8))
+    series = (
+        (ax.bar(x - w, idle_peak, w, label="idle peak"), idle_peak),
+        (ax.bar(x,     idle_curr, w, label="idle current"), idle_curr),
+        (ax.bar(x + w, work_max,  w, label="operation max"), work_max),
+    )
+    for bars, values in series:
         for bar, v in zip(bars, values):
             if not v:
                 continue
@@ -143,7 +155,7 @@ def plot_stack(sources, workload_label, title):
     ax.set_title(title)
     ax.grid(axis="y", linestyle=":", alpha=0.5)
     ax.legend(fontsize=9)
-    ymax = max(idle_peak + work_max) or 1
+    ymax = max(idle_peak + idle_curr + work_max) or 1
     ax.set_ylim(0, ymax * 1.18)
     return fig
 
