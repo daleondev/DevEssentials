@@ -128,9 +128,15 @@ def _layout(sources: list[SourceData], gap: float = 0.7
         x += 1.0
     if cur_group is not None and positions:
         raw_groups.append((cur_group, cur_start, len(positions) - 1))
-    # Only emit a subgroup row when at least one group has >1 source.
-    # When active, include singletons too so all devices appear at the same level.
-    if not any(end > start for _, start, end in raw_groups):
+    # Emit a subgroup row when at least one group has >1 source, OR when at
+    # least one source's label is just the device name (and would otherwise be
+    # hidden as duplicative). Always include all groups so devices appear at
+    # the same level.
+    needs_groups = (
+        any(end > start for _, start, end in raw_groups)
+        or any(s.label.lower() == device_for(s) for s in sources)
+    )
+    if not needs_groups:
         return positions, []
     groups = [
         (DEVICE_DISPLAY.get(key, key), (positions[start] + positions[end]) / 2)
