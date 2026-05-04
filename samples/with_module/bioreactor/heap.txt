@@ -1,0 +1,13 @@
+0000094037|43| Total non-mmapped bytes (arena):       3.32 MBytes
+0000094037|43| # of free chunks (ordblks):            78
+0000094037|43| # of free fastbin blocks (smblks):     0
+0000094037|43| # of mapped regions (hblks):           0
+0000094037|43| Bytes in mapped regions (hblkhd):      0.00 Bytes
+0000094037|43| Max. total allocated space (usmblks):  0.00 Bytes
+0000094037|43| Free bytes held in fastbins (fsmblks): 0.00 Bytes
+0000094037|43| Total allocated space (uordblks):      3.30 MBytes
+0000094037|43| Total free space (fordblks):           24.76 KBytes
+0000094037|43| Topmost releasable block (keepcost):   4.66 KBytes
+0000094037|43| SBRK Total Size:                       15.93 MBytes
+0000094037|43| SBRK Remaining Size:                   12.61 MBytes
+0000094037|43| SBRK Percentage Free:                  79.2%

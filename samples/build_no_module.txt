@@ -1,0 +1,8 @@
+[build] Memory region         Used Size  Region Size  %age Used
+[build]             ITCM:          0 GB      65504 B      0.00%
+[build]             DTCM:          0 GB       128 KB      0.00%
+[build]         AXI_SRAM:      244064 B       320 KB     74.48%
+[build]       SRAM1_LWIP:       15139 B        16 KB     92.40%
+[build]        SRAM4_DMA:       12380 B        16 KB     75.56%
+[build]   OCTO_SPI_FLASH:     4935868 B        64 MB      7.36%
+[build]     OCTO_SPI_RAM:       78480 B        16 MB      0.47%
