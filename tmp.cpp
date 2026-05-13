@@ -1513,6 +1513,10 @@ CMD=${1:-up}
 
 smoke_once() {
     rm -f "$PAYLOAD" "$OUTPUT"
+    WINEPREFIX="$WINEPREFIX" wineserver -p >/dev/null 2>&1 || true
+    WINEPREFIX="$WINEPREFIX" wine cmd /c exit >/dev/null 2>&1 || true
+    rm -f "$COM_LINK"
+    ln -s "$(readlink -f "$WINE_PORT")" "$COM_LINK"
     stdbuf -o0 cat "$LINUX_PORT" > "$OUTPUT" &
     CATPID=$!
     sleep 1
@@ -1526,6 +1530,7 @@ smoke_once() {
 
 if [[ "$CMD" == down ]]; then
     [[ -f "$PIDFILE" ]] && kill "$(cat "$PIDFILE")" 2>/dev/null || true
+    WINEPREFIX="$WINEPREFIX" wineserver -k >/dev/null 2>&1 || true
     rm -f "$PIDFILE" "$LINUX_PORT" "$WINE_PORT" "$PAYLOAD" "$OUTPUT" "$COM_LINK"
     echo "stopped"
     exit 0
@@ -1533,6 +1538,7 @@ fi
 
 command -v socat >/dev/null
 command -v wine >/dev/null
+command -v wineserver >/dev/null
 mkdir -p "$DIR" "$WINEPREFIX"
 
 if [[ ! -d "$WINEPREFIX/dosdevices" ]]; then
@@ -1548,6 +1554,8 @@ if [[ "$CMD" == up ]]; then
         [[ -e "$LINUX_PORT" && -e "$WINE_PORT" ]] && break
         sleep 0.1
     done
+    WINEPREFIX="$WINEPREFIX" wineserver -p >/dev/null 2>&1 || true
+    WINEPREFIX="$WINEPREFIX" wine cmd /c exit >/dev/null 2>&1 || true
     ln -s "$(readlink -f "$WINE_PORT")" "$COM_LINK"
     echo "linux: $LINUX_PORT"
     echo "wine:  $WINE_PORT"
