@@ -995,3 +995,500 @@ private:
         }
     }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import select
+import shlex
+import shutil
+import signal
+import subprocess
+import time
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+RUNTIME_DIR = Path(os.environ.get("COMMDEV_SERIAL_RUNTIME", "/tmp/commdev-serial"))
+STATE_PATH = RUNTIME_DIR / "state.json"
+SOCAT_LOG = RUNTIME_DIR / "socat.log"
+DEFAULT_LINUX_LINK = RUNTIME_DIR / "linux-port"
+DEFAULT_WINE_LINK = RUNTIME_DIR / "wine-port"
+DEFAULT_WINE_PAYLOAD_FILE = RUNTIME_DIR / "wine-smoke.txt"
+DEFAULT_COM_PORT = os.environ.get("COMMDEV_WINE_COM_PORT", "COM5")
+DEFAULT_TIMEOUT_SECONDS = float(os.environ.get("COMMDEV_SERIAL_SMOKE_TIMEOUT", "8"))
+DEFAULT_WINEPREFIX = Path(os.environ.get("WINEPREFIX", str(Path.home() / ".commdev-wine")))
+
+
+def run(
+    command: list[str],
+    *,
+    check: bool = True,
+    capture: bool = False,
+    quiet: bool = False,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    kwargs: dict[str, object] = {"cwd": ROOT, "text": True, "check": check, "env": env}
+
+    if capture:
+        kwargs["capture_output"] = True
+    elif quiet:
+        kwargs["stdout"] = subprocess.DEVNULL
+        kwargs["stderr"] = subprocess.DEVNULL
+
+    return subprocess.run(command, **kwargs)
+
+
+def ensure_command(command_name: str) -> str:
+    resolved = shutil.which(command_name)
+    if resolved:
+        return resolved
+
+    raise SystemExit(f"Required command is not available: {command_name}")
+
+
+def ensure_runtime_dir() -> None:
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def load_state() -> dict[str, object] | None:
+    if not STATE_PATH.exists():
+        return None
+
+    try:
+        return json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Failed to parse {STATE_PATH}: {exc}") from exc
+
+
+def save_state(state: dict[str, object]) -> None:
+    ensure_runtime_dir()
+    STATE_PATH.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def process_running(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+
+    return True
+
+
+def remove_path(path: Path) -> None:
+    if path.is_symlink() or path.exists():
+        path.unlink()
+
+
+def wine_env(prefix: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env["WINEPREFIX"] = str(prefix)
+    return env
+
+
+def ensure_wine_ready(prefix: Path) -> None:
+    ensure_command("wine")
+    ensure_command("wineboot")
+
+    prefix.parent.mkdir(parents=True, exist_ok=True)
+
+    if (prefix / "dosdevices").exists():
+        return
+
+    print(f"Initializing Wine prefix at {prefix}...", flush=True)
+    run(["wineboot", "-u"], env=wine_env(prefix))
+
+    if not (prefix / "dosdevices").exists():
+        raise SystemExit(f"Wine prefix initialization did not create {prefix / 'dosdevices'}")
+
+
+def com_port_name(raw_name: str) -> tuple[str, str]:
+    normalized = raw_name.strip().upper()
+    if not normalized.startswith("COM") or not normalized[3:].isdigit():
+        raise SystemExit(f"Invalid COM port name: {raw_name}")
+
+    return normalized, normalized.lower()
+
+
+def mapping_path(prefix: Path, com_port: str) -> Path:
+    _, device_name = com_port_name(com_port)
+    return prefix / "dosdevices" / device_name
+
+
+def wine_drive_path(path: Path) -> str:
+    return "Z:" + path.as_posix().replace("/", "\\")
+
+
+def wait_for_links(paths: list[Path], pid: int, timeout_seconds: float = 8.0) -> None:
+    deadline = time.monotonic() + timeout_seconds
+
+    while time.monotonic() < deadline:
+        if all(path.exists() for path in paths):
+            return
+
+        if not process_running(pid):
+            raise SystemExit(f"socat exited before creating PTY links. Check {SOCAT_LOG} for details.")
+
+        time.sleep(0.1)
+
+    missing = ", ".join(str(path) for path in paths if not path.exists())
+    raise SystemExit(f"Timed out waiting for PTY links: {missing}")
+
+
+def start_socat(linux_link: Path, wine_link: Path) -> int:
+    ensure_command("socat")
+    ensure_runtime_dir()
+
+    remove_path(linux_link)
+    remove_path(wine_link)
+
+    with SOCAT_LOG.open("w", encoding="utf-8") as log_file:
+        process = subprocess.Popen(
+            [
+                "socat",
+                "-d",
+                "-d",
+                f"pty,raw,echo=0,link={linux_link}",
+                f"pty,raw,echo=0,link={wine_link}",
+            ],
+            cwd=ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=log_file,
+            text=True,
+        )
+
+    wait_for_links([linux_link, wine_link], process.pid)
+    return process.pid
+
+
+def create_com_mapping(prefix: Path, com_port: str, target: Path) -> Path:
+    mapping = mapping_path(prefix, com_port)
+
+    if mapping.is_symlink():
+        if Path(os.path.realpath(mapping)) == target:
+            return mapping
+
+        raise SystemExit(
+            f"Wine mapping {mapping} already exists and points to {os.path.realpath(mapping)}. "
+            f"Choose a different COM port or remove the existing mapping first."
+        )
+
+    if mapping.exists():
+        raise SystemExit(f"Wine mapping {mapping} already exists and is not a symlink.")
+
+    mapping.symlink_to(target)
+    return mapping
+
+
+def read_status(state: dict[str, object]) -> dict[str, object]:
+    socat_pid = int(state["socat_pid"])
+    wine_prefix = Path(str(state["wine_prefix"]))
+    com_port = str(state["com_port"])
+    mapping = mapping_path(wine_prefix, com_port)
+
+    return {
+        **state,
+        "running": process_running(socat_pid),
+        "mapping_path": str(mapping),
+        "mapping_target": os.path.realpath(mapping) if mapping.is_symlink() else "",
+        "linux_link_exists": Path(str(state["linux_link"])).exists(),
+        "wine_link_exists": Path(str(state["wine_link"])).exists(),
+    }
+
+
+def print_status(state: dict[str, object]) -> None:
+    status = read_status(state)
+    windows_payload_file = wine_drive_path(DEFAULT_WINE_PAYLOAD_FILE)
+    print(f"socat pid: {status['socat_pid']}")
+    print(f"running: {status['running']}")
+    print(f"linux port: {status['linux_link']}")
+    print(f"wine port link: {status['wine_link']}")
+    print(f"wine port realpath: {status['wine_realpath']}")
+    print(f"Wine prefix: {status['wine_prefix']}")
+    print(f"COM mapping: {status['com_port']} -> {status['mapping_target'] or '<missing>'}")
+    print(f"socat log: {SOCAT_LOG}")
+    print()
+    print("Manual smoke test:")
+    print(f"  cat {shlex.quote(str(Path(str(status['linux_link']))))}")
+    print(
+        "  "
+        + shlex.join(
+            [
+                "env",
+                f"WINEPREFIX={status['wine_prefix']}",
+                "wine",
+                "cmd",
+                "/c",
+                f"echo hello-from-wine>{windows_payload_file} && copy /b {windows_payload_file} {status['com_port']} >NUL",
+            ]
+        )
+    )
+
+
+def stop_process(pid: int) -> None:
+    if not process_running(pid):
+        return
+
+    os.kill(pid, signal.SIGTERM)
+    deadline = time.monotonic() + 5.0
+
+    while time.monotonic() < deadline:
+        if not process_running(pid):
+            return
+
+        time.sleep(0.1)
+
+    os.kill(pid, signal.SIGKILL)
+
+
+def cleanup_state(state: dict[str, object] | None) -> None:
+    if state is None:
+        for path in (DEFAULT_LINUX_LINK, DEFAULT_WINE_LINK, DEFAULT_WINE_PAYLOAD_FILE, STATE_PATH):
+            if path == STATE_PATH:
+                if path.exists():
+                    path.unlink()
+            else:
+                remove_path(path)
+        return
+
+    if "socat_pid" in state:
+        stop_process(int(state["socat_pid"]))
+
+    wine_prefix = Path(str(state["wine_prefix"]))
+    com_port = str(state["com_port"])
+    mapping = mapping_path(wine_prefix, com_port)
+    expected_target = str(state.get("wine_realpath", ""))
+
+    if mapping.is_symlink() and os.path.realpath(mapping) == expected_target:
+        mapping.unlink()
+
+    for key in ("linux_link", "wine_link"):
+        remove_path(Path(str(state[key])))
+
+    remove_path(DEFAULT_WINE_PAYLOAD_FILE)
+
+    if STATE_PATH.exists():
+        STATE_PATH.unlink()
+
+
+def stale_state_cleanup() -> None:
+    state = load_state()
+    if state is None:
+        return
+
+    if process_running(int(state["socat_pid"])):
+        return
+
+    cleanup_state(state)
+
+
+def ensure_started(com_port: str, prefix: Path) -> dict[str, object]:
+    stale_state_cleanup()
+    state = load_state()
+    normalized_com_port, _ = com_port_name(com_port)
+
+    if state is not None and process_running(int(state["socat_pid"])):
+        existing_com_port = str(state["com_port"])
+        existing_prefix = Path(str(state["wine_prefix"]))
+        if existing_com_port != normalized_com_port or existing_prefix != prefix:
+            raise SystemExit(
+                f"Serial lab is already running with {existing_com_port} and {existing_prefix}. Run down first."
+            )
+
+        return state
+
+    ensure_wine_ready(prefix)
+
+    socat_pid = start_socat(DEFAULT_LINUX_LINK, DEFAULT_WINE_LINK)
+    wine_realpath = Path(os.path.realpath(DEFAULT_WINE_LINK))
+    create_com_mapping(prefix, normalized_com_port, wine_realpath)
+
+    state = {
+        "com_port": normalized_com_port,
+        "linux_link": str(DEFAULT_LINUX_LINK),
+        "linux_realpath": os.path.realpath(DEFAULT_LINUX_LINK),
+        "socat_pid": socat_pid,
+        "wine_link": str(DEFAULT_WINE_LINK),
+        "wine_prefix": str(prefix),
+        "wine_realpath": str(wine_realpath),
+    }
+    save_state(state)
+    return state
+
+
+def status_command(com_port: str, prefix: Path) -> int:
+    stale_state_cleanup()
+    state = load_state()
+    if state is None:
+        print("Serial lab is not running.")
+        return 1
+
+    expected_com_port, _ = com_port_name(com_port)
+    if str(state["com_port"]) != expected_com_port or Path(str(state["wine_prefix"])) != prefix:
+        raise SystemExit(
+            f"Serial lab is running with {state['com_port']} and {state['wine_prefix']}. "
+            f"Requested {expected_com_port} and {prefix}."
+        )
+
+    print_status(state)
+    return 0
+
+
+def escape_cmd_echo_payload(payload: str) -> str:
+    unsupported = set("&|<>^")
+    bad = sorted(character for character in payload if character in unsupported)
+    if bad:
+        joined = " ".join(sorted(set(bad)))
+        raise SystemExit(f"Payload contains unsupported cmd.exe metacharacters: {joined}")
+
+    return payload
+
+
+def read_cat_line(cat_process: subprocess.Popen[str], timeout_seconds: float) -> str:
+    if cat_process.stdout is None:
+        raise SystemExit("cat stdout was not captured")
+
+    ready, _, _ = select.select([cat_process.stdout], [], [], timeout_seconds)
+    if not ready:
+        raise SystemExit("Timed out waiting for data on the Linux PTY")
+
+    line = cat_process.stdout.readline()
+    if line == "":
+        stderr_output = ""
+        if cat_process.stderr is not None:
+            stderr_output = cat_process.stderr.read().strip()
+        raise SystemExit(f"cat exited before any PTY data was received. {stderr_output}".strip())
+
+    return line
+
+
+def run_wine_echo(prefix: Path, com_port: str, payload: str) -> None:
+    safe_payload = escape_cmd_echo_payload(payload)
+    payload_file = DEFAULT_WINE_PAYLOAD_FILE
+    payload_file.parent.mkdir(parents=True, exist_ok=True)
+    command = [
+        "wine",
+        "cmd",
+        "/c",
+        f"echo {safe_payload}>{wine_drive_path(payload_file)} && copy /b {wine_drive_path(payload_file)} {com_port} >NUL",
+    ]
+    run(command, env=wine_env(prefix))
+
+
+def cat_listener_command(device_path: Path) -> list[str]:
+    if shutil.which("stdbuf"):
+        return ["stdbuf", "-o0", "cat", str(device_path)]
+
+    return ["cat", str(device_path)]
+
+
+def smoke_command(com_port: str, prefix: Path, payload: str, timeout_seconds: float) -> int:
+    state = ensure_started(com_port, prefix)
+    linux_link = Path(str(state["linux_link"]))
+    cat_process = subprocess.Popen(
+        cat_listener_command(linux_link),
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    try:
+        time.sleep(0.2)
+        run_wine_echo(prefix, str(state["com_port"]), payload)
+        received = read_cat_line(cat_process, timeout_seconds)
+        normalized = received.rstrip("\r\n")
+        if payload == payload.rstrip() and normalized.rstrip() == payload:
+            normalized = normalized.rstrip()
+        if normalized != payload:
+            raise SystemExit(f"Smoke test failed: expected {payload!r}, received {normalized!r}")
+    finally:
+        cat_process.terminate()
+        try:
+            cat_process.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            cat_process.kill()
+            cat_process.wait(timeout=2.0)
+
+    print(f"Smoke test passed: received {normalized!r} on {linux_link}")
+    return 0
+
+
+def up_command(com_port: str, prefix: Path) -> int:
+    state = ensure_started(com_port, prefix)
+    print_status(state)
+    return 0
+
+
+def down_command() -> int:
+    state = load_state()
+    cleanup_state(state)
+    print("Serial lab stopped.")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Create and verify a Wine-to-Linux PTY bridge.")
+    parser.add_argument("command", choices=["up", "status", "smoke", "down"], nargs="?", default="status")
+    parser.add_argument("--com-port", default=DEFAULT_COM_PORT)
+    parser.add_argument("--wine-prefix", default=str(DEFAULT_WINEPREFIX))
+    parser.add_argument("--payload", default="hello-from-wine")
+    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    prefix = Path(args.wine_prefix).expanduser().resolve()
+
+    if args.command == "up":
+        return up_command(args.com_port, prefix)
+
+    if args.command == "status":
+        return status_command(args.com_port, prefix)
+
+    if args.command == "smoke":
+        return smoke_command(args.com_port, prefix, args.payload, args.timeout)
+
+    if args.command == "down":
+        return down_command()
+
+    raise SystemExit(f"Unsupported command: {args.command}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+
+dpkg --add-architecture i386 \
+wine \
+wine32 \
+wine64 \
+winbind \
