@@ -1492,3 +1492,71 @@ wine \
 wine32 \
 wine64 \
 winbind \
+
+
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+DIR=/tmp/commdev-serial
+PIDFILE=$DIR/socat.pid
+LOG=$DIR/socat.log
+LINUX_PORT=$DIR/linux-port
+WINE_PORT=$DIR/wine-port
+PAYLOAD=$DIR/wine-smoke.txt
+OUTPUT=$DIR/linux-read.txt
+WINEPREFIX=/home/vscode/.wine-commdev
+COM=COM5
+COM_LINK=$WINEPREFIX/dosdevices/com5
+WIN_PAYLOAD='Z:\tmp\commdev-serial\wine-smoke.txt'
+CMD=${1:-up}
+
+if [[ "$CMD" == down ]]; then
+    [[ -f "$PIDFILE" ]] && kill "$(cat "$PIDFILE")" 2>/dev/null || true
+    rm -f "$PIDFILE" "$LINUX_PORT" "$WINE_PORT" "$PAYLOAD" "$OUTPUT" "$COM_LINK"
+    echo "stopped"
+    exit 0
+fi
+
+command -v socat >/dev/null
+command -v wine >/dev/null
+mkdir -p "$DIR" "$WINEPREFIX"
+
+if [[ ! -d "$WINEPREFIX/dosdevices" ]]; then
+    WINEPREFIX="$WINEPREFIX" wineboot -u >/dev/null 2>&1 || true
+fi
+
+if [[ "$CMD" == up ]]; then
+    [[ -f "$PIDFILE" ]] && kill "$(cat "$PIDFILE")" 2>/dev/null || true
+    rm -f "$PIDFILE" "$LINUX_PORT" "$WINE_PORT" "$PAYLOAD" "$OUTPUT" "$COM_LINK"
+    socat -d -d "pty,raw,echo=0,link=$LINUX_PORT" "pty,raw,echo=0,link=$WINE_PORT" >/dev/null 2>"$LOG" &
+    echo $! > "$PIDFILE"
+    for _ in {1..80}; do
+        [[ -e "$LINUX_PORT" && -e "$WINE_PORT" ]] && break
+        sleep 0.1
+    done
+    ln -s "$(readlink -f "$WINE_PORT")" "$COM_LINK"
+    echo "linux: $LINUX_PORT"
+    echo "wine:  $WINE_PORT"
+    echo "com:   $COM -> $(readlink -f "$COM_LINK")"
+    exit 0
+fi
+
+if [[ "$CMD" == smoke ]]; then
+    [[ -e "$LINUX_PORT" && -L "$COM_LINK" ]] || "$0" up >/dev/null
+    rm -f "$PAYLOAD" "$OUTPUT"
+    stdbuf -o0 cat "$LINUX_PORT" > "$OUTPUT" &
+    CATPID=$!
+    sleep 0.2
+    WINEPREFIX="$WINEPREFIX" wine cmd /c "echo hello-from-wine>$WIN_PAYLOAD && copy /b $WIN_PAYLOAD $COM >NUL" >/dev/null
+    sleep 1
+    kill "$CATPID" 2>/dev/null || true
+    wait "$CATPID" 2>/dev/null || true
+    LINE=$(tr -d '\r' < "$OUTPUT" | head -n 1 | sed 's/[[:space:]]*$//')
+    [[ "$LINE" == "hello-from-wine" ]]
+    echo "$LINE"
+    exit 0
+fi
+
+echo "usage: $0 [up|smoke|down]" >&2
+exit 1
