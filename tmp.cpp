@@ -1511,6 +1511,19 @@ COM_LINK=$WINEPREFIX/dosdevices/com5
 WIN_PAYLOAD='Z:\tmp\commdev-serial\wine-smoke.txt'
 CMD=${1:-up}
 
+smoke_once() {
+    rm -f "$PAYLOAD" "$OUTPUT"
+    stdbuf -o0 cat "$LINUX_PORT" > "$OUTPUT" &
+    CATPID=$!
+    sleep 1
+    WINEPREFIX="$WINEPREFIX" wine cmd /c "echo hello-from-wine>$WIN_PAYLOAD && copy /b $WIN_PAYLOAD $COM >NUL" >/dev/null 2>&1 || true
+    sleep 1
+    kill "$CATPID" 2>/dev/null || true
+    wait "$CATPID" 2>/dev/null || true
+    LINE=$(tr -d '\r' < "$OUTPUT" | head -n 1 | sed 's/[[:space:]]*$//')
+    [[ "$LINE" == "hello-from-wine" ]]
+}
+
 if [[ "$CMD" == down ]]; then
     [[ -f "$PIDFILE" ]] && kill "$(cat "$PIDFILE")" 2>/dev/null || true
     rm -f "$PIDFILE" "$LINUX_PORT" "$WINE_PORT" "$PAYLOAD" "$OUTPUT" "$COM_LINK"
@@ -1543,17 +1556,14 @@ if [[ "$CMD" == up ]]; then
 fi
 
 if [[ "$CMD" == smoke ]]; then
-    [[ -e "$LINUX_PORT" && -L "$COM_LINK" ]] || "$0" up >/dev/null
-    rm -f "$PAYLOAD" "$OUTPUT"
-    stdbuf -o0 cat "$LINUX_PORT" > "$OUTPUT" &
-    CATPID=$!
-    sleep 0.2
-    WINEPREFIX="$WINEPREFIX" wine cmd /c "echo hello-from-wine>$WIN_PAYLOAD && copy /b $WIN_PAYLOAD $COM >NUL" >/dev/null
-    sleep 1
-    kill "$CATPID" 2>/dev/null || true
-    wait "$CATPID" 2>/dev/null || true
-    LINE=$(tr -d '\r' < "$OUTPUT" | head -n 1 | sed 's/[[:space:]]*$//')
-    [[ "$LINE" == "hello-from-wine" ]]
+    "$0" up >/dev/null
+    if ! smoke_once; then
+        "$0" up >/dev/null
+        smoke_once || {
+            echo "${LINE:-not ready}"
+            exit 1
+        }
+    fi
     echo "$LINE"
     exit 0
 fi
