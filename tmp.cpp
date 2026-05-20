@@ -1,3 +1,36 @@
+template<auto MemberPtr>
+    requires std::is_member_object_pointer_v<decltype(MemberPtr)>
+constexpr size_t member_index()
+{
+    using Object = get_class_type_t<decltype(MemberPtr)>;
+    Object dummy{};
+
+    auto offset{ std::numeric_limits<size_t>::max() };
+    reflect::for_each([&](const auto I) {
+        if (static_cast<void*>(&reflect::get<I>(dummy)) == static_cast<void*>(&(dummy.*MemberPtr))) {
+            offset = I;
+        }
+    }, dummy);
+
+    assert(offset != std::numeric_limits<size_t>::max());
+    return offset;
+}
+
+template<auto Register>
+    requires requires {
+        { get_class_type_t<decltype(Register)>::BASE_ADDRESS } -> std::convertible_to<uint16_t>;
+    }
+constexpr uint16_t calculateRegisterAddress()
+{
+    using Registers = get_class_type_t<decltype(Register)>;
+    constexpr auto index{ member_index<Register>() };
+    constexpr auto byteOffset{ reflect::offset_of<index, Registers>() };
+    constexpr auto registerOffset{ byteOffset / sizeof(uint16_t) };
+    return static_cast<uint16_t>(Registers::BASE_ADDRESS + registerOffset);
+}
+
+
+
 #include <functional>
 #include <memory>
 #include <optional>
