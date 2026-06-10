@@ -1611,3 +1611,159 @@ fi
 
 echo "usage: $0 [up|smoke|down]" >&2
 exit 1
+
+
+
+
+
+
+
+
+
+
+
+
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
+#include "HAL/Implementation/HLDriver/WVS.hpp"
+#include "HAL/Interfaces/HLDriver/IModbusASCII.hpp"
+
+using namespace testing;
+using namespace HAL::Implementation::HLDriver;
+
+namespace {
+
+class MockModbusASCII final : public HAL::Interfaces::HLDriver::IModbusASCII {
+public:
+    MOCK_METHOD(std::vector<uint16_t>,
+                readHoldingRegister,
+                (uint16_t address, uint16_t quantity),
+                (override));
+
+    MOCK_METHOD(bool,
+                writeRegister,
+                (uint16_t address, const std::vector<uint16_t>& values),
+                (override));
+};
+
+class WVSTest : public Test {
+protected:
+    MockModbusASCII* mock{};
+    std::unique_ptr<WVS> sut;
+
+    void SetUp() override {
+        auto driver = std::make_unique<StrictMock<MockModbusASCII>>();
+        mock = driver.get();
+        sut = std::make_unique<WVS>(std::move(driver));
+    }
+};
+
+TEST_F(WVSTest, getCurrentStateReadsCurrentStateRegister) {
+    EXPECT_CALL(*mock, readHoldingRegister(0x0064, 1))
+        .WillOnce(Return(std::vector<uint16_t>{2}));
+
+    auto result = sut->getCurrentState();
+
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, static_cast<WVS::State>(2));
+}
+
+TEST_F(WVSTest, isTHDisplacementDemandedReadsTHDisplacementRegister) {
+    EXPECT_CALL(*mock, readHoldingRegister(0x0066, 1))
+        .WillOnce(Return(std::vector<uint16_t>{1}));
+
+    auto result = sut->isTHDisplacementDemanded();
+
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(*result);
+}
+
+TEST_F(WVSTest, resetTHDisplacementDemandWritesFalseToTHDisplacementRegister) {
+    EXPECT_CALL(*mock, writeRegister(0x0066, ElementsAre(0)))
+        .WillOnce(Return(true));
+
+    EXPECT_TRUE(sut->resetTHDisplacementDemand());
+}
+
+TEST_F(WVSTest, sendCommandWritesCommandToActionDemandRegister) {
+    auto cmd = static_cast<WVS::Command>(3);
+
+    EXPECT_CALL(*mock, writeRegister(0x00C8, ElementsAre(3)))
+        .WillOnce(Return(true));
+
+    EXPECT_TRUE(sut->sendCommand(cmd));
+}
+
+TEST_F(WVSTest, disableReopeningWritesFalseToReopeningDemandRegister) {
+    EXPECT_CALL(*mock, writeRegister(0x00C9, ElementsAre(0)))
+        .WillOnce(Return(true));
+
+    EXPECT_TRUE(sut->disableReopening());
+}
+
+TEST_F(WVSTest, enableReopeningWritesTrueToReopeningDemandRegister) {
+    EXPECT_CALL(*mock, writeRegister(0x00C9, ElementsAre(1)))
+        .WillOnce(Return(true));
+
+    EXPECT_TRUE(sut->enableReopening());
+}
+
+TEST_F(WVSTest, getStatusReadsStatusRegisterBlock) {
+    EXPECT_CALL(*mock, readHoldingRegister(0x0064, 6))
+        .WillOnce(Return(std::vector<uint16_t>{
+            2,      // currentState
+            1,      // previousState
+            1,      // thDisplacement
+            7,      // resetCause
+            0x0001, // uptime_msb
+            0x0002  // uptime_lsb
+        }));
+
+    auto result = sut->getStatus();
+
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->currentState, static_cast<WVS::State>(2));
+    EXPECT_EQ(result->previousState, static_cast<WVS::State>(1));
+    EXPECT_TRUE(result->thDisplacement);
+    EXPECT_EQ(result->resetCause, 7);
+}
+
+TEST_F(WVSTest, getStatusReturnsNulloptIfRegisterReadNeverReturnsExpectedSize) {
+    EXPECT_CALL(*mock, readHoldingRegister(0x0064, 6))
+        .Times(4) // MAX_RETRIES is 3, loop uses <=, so 4 attempts
+        .WillRepeatedly(Return(std::vector<uint16_t>{}));
+
+    auto result = sut->getStatus();
+
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(WVSTest, getInfoReadsInfoRegisterBlock) {
+    std::vector<uint16_t> registers(24, 0);
+
+    registers[0] = 1;        // registerFormatVersion
+    registers[1] = 0x1111;   // uniqueIdentifier[0]
+    registers[2] = 0x2222;
+    registers[3] = 0x3333;
+    registers[4] = 0x4444;
+    registers[5] = 0x5555;
+    registers[6] = 0x6666;
+    registers[7] = 0x7777;
+    registers[8] = 0x8888;
+
+    registers[9]  = 1; // mc major
+    registers[10] = 2; // mc minor
+    registers[11] = 3; // mc patch
+
+    EXPECT_CALL(*mock, readHoldingRegister(0x0000, 24))
+        .WillOnce(Return(registers));
+
+    auto result = sut->getInfo();
+
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->registerFormatVersion, 1);
+    EXPECT_EQ(result->mcSoftwareVersion, "v1.2.3");
+}
+
+} // namespace
