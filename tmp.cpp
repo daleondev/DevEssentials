@@ -2168,3 +2168,472 @@ std::vector<uint8_t> ModbusASCII::receiveMessage() const {
 }
 
 } // namespace HAL::Implementation::HLDriver
+
+
+
+
+
+
+
+
+
+
+
+
+
+#include "ModbusASCII.hpp"
+
+#include <algorithm>
+#include <charconv>
+#include <chrono>
+#include <cstdint>
+#include <optional>
+#include <vector>
+
+#include "DebugInterface/Write.hpp"
+
+namespace HAL::Implementation::HLDriver {
+
+static constexpr uint8_t START_CHAR{':'};
+static constexpr uint8_t CARRIAGE_RETURN{'\r'};
+static constexpr uint8_t LINE_FEED{'\n'};
+
+static constexpr size_t SIZE_START{1U};
+static constexpr size_t SIZE_ADDRESS{2U};
+static constexpr size_t SIZE_FUNCTION{2U};
+static constexpr size_t SIZE_LRC{2U};
+static constexpr size_t SIZE_END{2U};
+
+static constexpr size_t SIZE_PREFIX{SIZE_START + SIZE_ADDRESS + SIZE_FUNCTION};
+static constexpr size_t SIZE_SUFFIX{SIZE_LRC + SIZE_END};
+static constexpr size_t SIZE_MSG_FRAME{SIZE_PREFIX + SIZE_SUFFIX};
+
+static constexpr size_t BYTES_TO_STRING_FACTOR{2U};
+
+static constexpr uint32_t BITS_PER_BYTE{10U}; // 8N1: 1 start + 8 data + 1 stop
+static constexpr uint32_t BAUD_RATE{9600U};
+static constexpr auto RX_DELAY_MARGIN{2_milliseconds};
+
+namespace MsgBuilder {
+
+static constexpr size_t MAX_REGISTER{125U};
+static constexpr char HEX[]{"0123456789ABCDEF"};
+
+static void appendHexByte(uint8_t value, std::vector<uint8_t>& out) {
+    out.push_back(static_cast<uint8_t>(HEX[(value >> 4U) & 0x0FU]));
+    out.push_back(static_cast<uint8_t>(HEX[value & 0x0FU]));
+}
+
+static void appendU16(uint16_t value, std::vector<uint8_t>& out) {
+    appendHexByte(static_cast<uint8_t>((value >> 8U) & 0xFFU), out);
+    appendHexByte(static_cast<uint8_t>(value & 0xFFU), out);
+}
+
+} // namespace MsgBuilder
+
+namespace MsgExtractor {
+
+static constexpr size_t BYTE_COUNT_INDEX{5U};
+
+static bool hasEvenSize(const std::vector<uint8_t>& msg) {
+    return (msg.size() % 2U) == 0U;
+}
+
+static std::optional<uint8_t> fromString(
+    const std::vector<uint8_t>& msg,
+    size_t index)
+{
+    if (index + 1U >= msg.size()) {
+        return std::nullopt;
+    }
+
+    const char* begin{reinterpret_cast<const char*>(&msg[index])};
+    const char* end{begin + 2};
+
+    uint8_t value{};
+    const auto [ptr, ec] = std::from_chars(begin, end, value, 16);
+
+    if (ptr != end || ec != std::errc{}) {
+        return std::nullopt;
+    }
+
+    return value;
+}
+
+static std::vector<uint8_t> decodeAsciiFrame(const std::vector<uint8_t>& msg) {
+    if (msg.size() < SIZE_MSG_FRAME) {
+        return {};
+    }
+
+    if (hasEvenSize(msg)) {
+        return {};
+    }
+
+    std::vector<uint8_t> decoded;
+    decoded.reserve(msg.size() / BYTES_TO_STRING_FACTOR);
+
+    // Skip ':' and decode all ASCII hex bytes until before CRLF.
+    // Result: [slaveAddress, functionCode, payload..., lrc]
+    for (size_t index = SIZE_START;
+         index + 1U < msg.size() - SIZE_END;
+         index += BYTES_TO_STRING_FACTOR) {
+        const auto byte = fromString(msg, index);
+        if (!byte.has_value()) {
+            return {};
+        }
+
+        decoded.push_back(byte.value());
+    }
+
+    return decoded;
+}
+
+} // namespace MsgExtractor
+
+ModbusASCII::ModbusASCII(
+    std::shared_ptr<HAL::Interfaces::LLDriver::IUART> uart,
+    uint8_t slaveAddress)
+    : m_uart{uart}
+    , m_slaveAddress{slaveAddress}
+{
+}
+
+std::vector<uint16_t> ModbusASCII::readHoldingRegister(
+    uint16_t registerAddress,
+    uint16_t quantity)
+{
+    const auto request = buildReadMessage(registerAddress, quantity);
+
+    sendMessage(request);
+    waitInitialRxDelay(request.size(), expectedReadResponseSize(quantity));
+
+    const auto receivedMessage = receiveMessage();
+
+    const auto decoded = validateAndDecode(
+        receivedMessage,
+        FunctionCode::READ_HOLDING_REGISTERS);
+
+    if (!decoded.has_value()) {
+        return {};
+    }
+
+    const auto data = extractReadData(decoded.value());
+    if (data.size() != quantity * sizeof(uint16_t)) {
+        return {};
+    }
+
+    std::vector<uint16_t> registers;
+    registers.reserve(quantity);
+
+    for (size_t index = 0U; index + 1U < data.size(); index += 2U) {
+        registers.push_back(static_cast<uint16_t>(
+            static_cast<uint16_t>(data[index]) << 8U |
+            static_cast<uint16_t>(data[index + 1U])));
+    }
+
+    return registers;
+}
+
+bool ModbusASCII::writeRegister(
+    uint16_t registerAddress,
+    const std::vector<uint16_t>& values)
+{
+    const auto request = buildWriteMessage(registerAddress, values);
+
+    sendMessage(request);
+    waitInitialRxDelay(request.size(), expectedWriteResponseSize());
+
+    const auto receivedMessage = receiveMessage();
+
+    return validateAndDecode(
+        receivedMessage,
+        FunctionCode::WRITE_MULTIPLE_REGISTERS).has_value();
+}
+
+std::vector<uint8_t> ModbusASCII::buildReadMessage(
+    uint16_t registerAddress,
+    uint16_t quantity) const
+{
+    sysassert(quantity > 0U);
+    sysassert(quantity < MsgBuilder::MAX_REGISTER);
+
+    std::vector<uint8_t> data;
+    data.reserve(sizeof(registerAddress) + sizeof(quantity));
+
+    MsgBuilder::appendU16(registerAddress, data);
+    MsgBuilder::appendU16(quantity, data);
+
+    return build(FunctionCode::READ_HOLDING_REGISTERS, data);
+}
+
+std::vector<uint8_t> ModbusASCII::buildWriteMessage(
+    uint16_t registerAddress,
+    const std::vector<uint16_t>& values,
+    uint16_t quantity) const
+{
+    sysassert(!values.empty());
+    sysassert(values.size() < MsgBuilder::MAX_REGISTER);
+
+    const auto registerCount = quantity == 0U
+        ? static_cast<uint16_t>(values.size())
+        : quantity;
+
+    const auto byteCount = static_cast<uint8_t>(
+        values.size() * sizeof(uint16_t));
+
+    std::vector<uint8_t> data;
+    data.reserve(
+        sizeof(registerAddress) +
+        sizeof(registerCount) +
+        sizeof(byteCount) +
+        values.size() * sizeof(uint16_t));
+
+    MsgBuilder::appendU16(registerAddress, data);
+    MsgBuilder::appendU16(registerCount, data);
+    data.push_back(byteCount);
+
+    for (const auto value : values) {
+        MsgBuilder::appendU16(value, data);
+    }
+
+    return build(FunctionCode::WRITE_MULTIPLE_REGISTERS, data);
+}
+
+std::vector<uint8_t> ModbusASCII::build(
+    const ModbusASCII::FunctionCode& functionCode,
+    const std::vector<uint8_t>& data) const
+{
+    sysassert(m_slaveAddress > 0U && m_slaveAddress < 248U);
+
+    const auto function = static_cast<uint8_t>(functionCode);
+
+    std::vector<uint8_t> message;
+    message.reserve(SIZE_MSG_FRAME + data.size() * BYTES_TO_STRING_FACTOR);
+
+    message.push_back(START_CHAR);
+
+    MsgBuilder::appendHexByte(m_slaveAddress, message);
+    MsgBuilder::appendHexByte(function, message);
+
+    for (const auto byte : data) {
+        MsgBuilder::appendHexByte(byte, message);
+    }
+
+    appendLRC(function, data, message);
+
+    message.push_back(CARRIAGE_RETURN);
+    message.push_back(LINE_FEED);
+
+    return message;
+}
+
+void ModbusASCII::appendLRC(
+    uint8_t functionCode,
+    const std::vector<uint8_t>& data,
+    std::vector<uint8_t>& message) const
+{
+    std::vector<uint8_t> lrcInput;
+    lrcInput.reserve(2U + data.size());
+
+    lrcInput.push_back(m_slaveAddress);
+    lrcInput.push_back(functionCode);
+    lrcInput.insert(lrcInput.end(), data.begin(), data.end());
+
+    MsgBuilder::appendHexByte(calcLRC(lrcInput), message);
+}
+
+uint8_t ModbusASCII::calcLRC(const std::vector<uint8_t>& data) const {
+    uint8_t sum{0U};
+
+    for (const auto byte : data) {
+        sum = static_cast<uint8_t>(sum + byte);
+    }
+
+    return static_cast<uint8_t>(-static_cast<int32_t>(sum));
+}
+
+std::optional<std::vector<uint8_t>> ModbusASCII::validateAndDecode(
+    const std::vector<uint8_t>& msg,
+    const ModbusASCII::FunctionCode& functionCode) const
+{
+    if (msg.size() < SIZE_MSG_FRAME) {
+        return std::nullopt;
+    }
+
+    if (msg.front() != START_CHAR) {
+        return std::nullopt;
+    }
+
+    if (msg[msg.size() - 2U] != CARRIAGE_RETURN) {
+        return std::nullopt;
+    }
+
+    if (msg[msg.size() - 1U] != LINE_FEED) {
+        return std::nullopt;
+    }
+
+    auto decoded = MsgExtractor::decodeAsciiFrame(msg);
+    if (decoded.size() < 3U) {
+        return std::nullopt;
+    }
+
+    if (decoded[0U] != m_slaveAddress) {
+        return std::nullopt;
+    }
+
+    if (decoded[1U] != static_cast<uint8_t>(functionCode)) {
+        return std::nullopt;
+    }
+
+    const auto receivedLRC = decoded.back();
+
+    std::vector<uint8_t> lrcInput;
+    lrcInput.reserve(decoded.size() - 1U);
+    lrcInput.insert(lrcInput.end(), decoded.begin(), decoded.end() - 1);
+
+    if (receivedLRC != calcLRC(lrcInput)) {
+        return std::nullopt;
+    }
+
+    if (functionCode == FunctionCode::READ_HOLDING_REGISTERS &&
+        !isDecodedReadResponseComplete(decoded)) {
+        return std::nullopt;
+    }
+
+    if (functionCode == FunctionCode::WRITE_MULTIPLE_REGISTERS &&
+        !isDecodedWriteResponseComplete(decoded)) {
+        return std::nullopt;
+    }
+
+    return decoded;
+}
+
+bool ModbusASCII::isDecodedReadResponseComplete(
+    const std::vector<uint8_t>& decoded) const
+{
+    // [slaveAddress, functionCode, byteCount, data..., lrc]
+    if (decoded.size() < 5U) {
+        return false;
+    }
+
+    const auto byteCount = decoded[2U];
+    const auto expectedSize =
+        1U + // slave address
+        1U + // function code
+        1U + // byte count
+        byteCount +
+        1U;  // lrc
+
+    return decoded.size() == expectedSize;
+}
+
+bool ModbusASCII::isDecodedWriteResponseComplete(
+    const std::vector<uint8_t>& decoded) const
+{
+    // [slaveAddress, functionCode, registerAddressHi, registerAddressLo,
+    //  quantityHi, quantityLo, lrc]
+    static constexpr size_t EXPECTED_SIZE{7U};
+
+    return decoded.size() == EXPECTED_SIZE;
+}
+
+std::vector<uint8_t> ModbusASCII::extractReadData(
+    const std::vector<uint8_t>& decoded) const
+{
+    // Read response:
+    // [slaveAddress, functionCode, byteCount, data..., lrc]
+    if (!isDecodedReadResponseComplete(decoded)) {
+        return {};
+    }
+
+    return std::vector<uint8_t>{decoded.begin() + 3, decoded.end() - 1};
+}
+
+size_t ModbusASCII::expectedReadResponseSize(uint16_t quantity) const {
+    return SIZE_START +
+           SIZE_ADDRESS +
+           SIZE_FUNCTION +
+           2U + // byte count, ASCII encoded
+           quantity * sizeof(uint16_t) * BYTES_TO_STRING_FACTOR +
+           SIZE_LRC +
+           SIZE_END;
+}
+
+size_t ModbusASCII::expectedWriteResponseSize() const {
+    return SIZE_START +
+           SIZE_ADDRESS +
+           SIZE_FUNCTION +
+           4U + // register address, ASCII encoded
+           4U + // quantity, ASCII encoded
+           SIZE_LRC +
+           SIZE_END;
+}
+
+std::chrono::milliseconds ModbusASCII::calculateTransferTime(
+    size_t txSize,
+    size_t rxSize,
+    uint32_t baudRate) const
+{
+    const auto totalBits =
+        static_cast<uint64_t>(txSize + rxSize) * BITS_PER_BYTE;
+
+    const auto microseconds =
+        (totalBits * 1'000'000ULL + baudRate - 1U) / baudRate;
+
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::microseconds{microseconds});
+}
+
+void ModbusASCII::waitInitialRxDelay(
+    size_t txSize,
+    size_t rxSize) const
+{
+    const auto delay =
+        calculateTransferTime(txSize, rxSize, BAUD_RATE) + RX_DELAY_MARGIN;
+
+    (void)m_uart->waitForReadyRead(delay);
+}
+
+void ModbusASCII::sendMessage(const std::vector<uint8_t>& msg) const {
+    m_uart->flushInput();
+    m_uart->write(msg);
+
+    if (!m_uart->waitForBytesWritten(TIMEOUT_VAL)) {
+        PANIC_MODE();
+    }
+}
+
+std::vector<uint8_t> ModbusASCII::receiveMessage() const {
+    std::vector<uint8_t> receivedMessage;
+
+    ::Utilities::ElapsedTimer timer;
+
+    while (!timer.isExpired(TIMEOUT_VAL)) {
+        const auto remaining =
+            TIMEOUT_VAL - std::min(timer.elapsed(), TIMEOUT_VAL);
+
+        if (!m_uart->waitForReadyRead(remaining)) {
+            break;
+        }
+
+        auto chunk = m_uart->read();
+        receivedMessage.insert(
+            receivedMessage.end(),
+            chunk.begin(),
+            chunk.end());
+
+        if (receivedMessage.size() >= SIZE_END &&
+            receivedMessage[receivedMessage.size() - 2U] == CARRIAGE_RETURN &&
+            receivedMessage[receivedMessage.size() - 1U] == LINE_FEED) {
+            return receivedMessage;
+        }
+    }
+
+    SERIAL_DEBUG_LEVEL_WARNING(
+        "%s: No complete message received!",
+        __PRETTY_FUNCTION__);
+
+    return {};
+}
+
+} // namespace HAL::Implementation::HLDriver
